@@ -1,0 +1,16 @@
+# PromptShield — Caddy TLS terminator
+# Replace your.domain.com with your actual domain.
+# Caddy auto-fetches and auto-renews a Let's Encrypt certificate.
+#
+# Usage:
+#   sudo caddy run --config /etc/caddy/Caddyfile
+#
+# Or copy into an existing Caddyfile and reload:
+#   sudo systemctl reload caddy
+
+your.domain.com {
+    reverse_proxy localhost:8080 {
+        # Disable response buffering — required for SSE streaming responses.
+        flush_interval -1
+    }
+}

@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Load alert rules
+rule_files:
+  - "grafana/alerts.yml"
+
+scrape_configs:
+  - job_name: promptshield
+    # host.docker.internal resolves to the host machine from inside Docker.
+    # Works on Docker Desktop (Mac/Windows) and Linux with the extra_hosts
+    # setting in docker-compose.observability.yml.
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+    scrape_interval: 15s

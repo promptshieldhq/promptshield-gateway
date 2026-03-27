@@ -1,0 +1,14 @@
+# Environment / secrets — never commit real credentials
+.env
+*.pem
+*.key
+*.crt
+
+# Build output
+bin/
+dist/
+
+# Editor / OS
+.DS_Store
+*.swp
+*.swo

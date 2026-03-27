@@ -1,0 +1,1341 @@
+{
+  "dashboard": {
+    "annotations": {
+      "list": []
+    },
+    "description": "PromptShield LLM security proxy \u2014 tokens, requests, latency, model breakdown",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "panels": [
+      {
+        "type": "row",
+        "id": 1,
+        "title": "Overview",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "panels": []
+      },
+      {
+        "type": "stat",
+        "id": 2,
+        "title": "Request Rate",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 0,
+          "y": 1
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(rate(promptshield_requests_total[$__rate_interval])) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "reqps"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 3,
+        "title": "Block Rate",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 5,
+          "y": 1
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "(sum(rate(promptshield_requests_total{action='block'}[$__rate_interval])) or vector(0)) / (sum(rate(promptshield_requests_total[$__rate_interval])) or vector(1)) * 100",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5
+                },
+                {
+                  "color": "red",
+                  "value": 15
+                }
+              ]
+            },
+            "unit": "percent",
+            "decimals": 1
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 4,
+        "title": "Error Rate",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 10,
+          "y": 1
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "(sum(rate(promptshield_requests_total{action='error'}[$__rate_interval])) or vector(0)) / (sum(rate(promptshield_requests_total[$__rate_interval])) or vector(1)) * 100",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 1
+                },
+                {
+                  "color": "red",
+                  "value": 5
+                }
+              ]
+            },
+            "unit": "percent",
+            "decimals": 1
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 5,
+        "title": "p95 Latency",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 5,
+          "x": 15,
+          "y": 1
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "histogram_quantile(0.95, sum by (le) (rate(promptshield_request_duration_seconds_bucket[$__rate_interval]))) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 2
+                },
+                {
+                  "color": "red",
+                  "value": 5
+                }
+              ]
+            },
+            "unit": "s",
+            "decimals": 2
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 6,
+        "title": "Active Models",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 4,
+          "x": 20,
+          "y": 1
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "count(count by (model) (rate(promptshield_requests_total[$__rate_interval]))) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "blue",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "row",
+        "id": 7,
+        "title": "Traffic",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 5
+        },
+        "panels": []
+      },
+      {
+        "type": "timeseries",
+        "id": 8,
+        "title": "Request Rate by Action",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 6
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum by (action) (rate(promptshield_requests_total[$__rate_interval]))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{action}}"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "timeseries",
+        "id": 9,
+        "title": "Request Rate by Model",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 6
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum by (model) (rate(promptshield_requests_total[$__rate_interval]))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "row",
+        "id": 10,
+        "title": "Token Counters \u2014 Cumulative So Far",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 14
+        },
+        "panels": []
+      },
+      {
+        "type": "stat",
+        "id": 11,
+        "title": "Total Tokens \u2014 So Far",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 5,
+          "w": 6,
+          "x": 0,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(promptshield_tokens_total{token_type='total'}) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "blue",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 12,
+        "title": "Prompt Tokens \u2014 So Far",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 5,
+          "w": 6,
+          "x": 6,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(promptshield_tokens_total{token_type='prompt'}) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "purple",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 13,
+        "title": "Completion Tokens \u2014 So Far",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 5,
+          "w": 6,
+          "x": 12,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(promptshield_tokens_total{token_type='completion'}) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "stat",
+        "id": 14,
+        "title": "Tokens Last 24 h",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 5,
+          "w": 6,
+          "x": 18,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(increase(promptshield_tokens_total{token_type='total'}[24h])) or vector(0)",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "orange",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "row",
+        "id": 15,
+        "title": "Performance",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 20
+        },
+        "panels": []
+      },
+      {
+        "type": "timeseries",
+        "id": 16,
+        "title": "Latency Percentiles \u2014 p50 / p95 / p99",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 21
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "histogram_quantile(0.50, sum by (le) (rate(promptshield_request_duration_seconds_bucket[$__rate_interval])))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "p50"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "histogram_quantile(0.95, sum by (le) (rate(promptshield_request_duration_seconds_bucket[$__rate_interval])))",
+            "refId": "B",
+            "instant": false,
+            "legendFormat": "p95"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(promptshield_request_duration_seconds_bucket[$__rate_interval])))",
+            "refId": "C",
+            "instant": false,
+            "legendFormat": "p99"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "timeseries",
+        "id": 17,
+        "title": "p95 Latency by Model",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 21
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "histogram_quantile(0.95, sum by (le, model) (rate(promptshield_request_duration_seconds_bucket[$__rate_interval])))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "row",
+        "id": 18,
+        "title": "Tokens",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 29
+        },
+        "panels": []
+      },
+      {
+        "type": "timeseries",
+        "id": 19,
+        "title": "Token Burn Rate by Model (tokens / min)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 30
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum by (model) (rate(promptshield_tokens_total{token_type='total'}[$__rate_interval])) * 60",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "timeseries",
+        "id": 20,
+        "title": "Prompt vs Completion Tokens",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 30
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(rate(promptshield_tokens_total{token_type='prompt'}[$__rate_interval]))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "prompt"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(rate(promptshield_tokens_total{token_type='completion'}[$__rate_interval]))",
+            "refId": "B",
+            "instant": false,
+            "legendFormat": "completion"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "fillOpacity": 10,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "timeseries",
+        "id": 21,
+        "title": "Cumulative Token Accumulation (All Time)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 38
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(promptshield_tokens_total{token_type='total'})",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "total"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(promptshield_tokens_total{token_type='prompt'})",
+            "refId": "B",
+            "instant": false,
+            "legendFormat": "prompt"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum(promptshield_tokens_total{token_type='completion'})",
+            "refId": "C",
+            "instant": false,
+            "legendFormat": "completion"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "bottom",
+            "calcs": [
+              "mean",
+              "max"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": {
+              "fillOpacity": 15,
+              "lineWidth": 2
+            }
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "row",
+        "id": 22,
+        "title": "Models",
+        "collapsed": false,
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 46
+        },
+        "panels": []
+      },
+      {
+        "type": "bargauge",
+        "id": 23,
+        "title": "Total Requests by Model (24 h)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 47
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sort_desc(sum by (model) (increase(promptshield_requests_total[24h])))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "displayMode": "gradient",
+          "valueMode": "color"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "blue",
+                  "value": null
+                }
+              ]
+            },
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "barchart",
+        "id": 24,
+        "title": "Total Tokens by Model (24 h)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 47
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sort_desc(sum by (model) (increase(promptshield_tokens_total{token_type='prompt'}[24h])))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "prompt {{model}}"
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sort_desc(sum by (model) (increase(promptshield_tokens_total{token_type='completion'}[24h])))",
+            "refId": "B",
+            "instant": false,
+            "legendFormat": "completion {{model}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "stacking": "normal",
+          "tooltip": {
+            "mode": "multi"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "bargauge",
+        "id": 25,
+        "title": "Block Rate by Model (24 h)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 47
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "clamp_min(  sum by (model) (increase(promptshield_requests_total{action='block'}[24h]))  / on(model) group_left sum by (model) (increase(promptshield_requests_total[24h]))  * 100, 0)",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "reduceOptions": {
+            "calcs": [
+              "sum"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "displayMode": "gradient",
+          "valueMode": "color"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 5
+                },
+                {
+                  "color": "red",
+                  "value": 15
+                }
+              ]
+            },
+            "unit": "percent"
+          },
+          "overrides": []
+        }
+      },
+      {
+        "type": "piechart",
+        "id": 26,
+        "title": "Action Split \u2014 Last Hour",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "promptshield-prometheus"
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 47
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "promptshield-prometheus"
+            },
+            "expr": "sum by (action) (increase(promptshield_requests_total[1h]))",
+            "refId": "A",
+            "instant": false,
+            "legendFormat": "{{action}}"
+          }
+        ],
+        "options": {
+          "pieType": "donut",
+          "tooltip": {
+            "mode": "multi"
+          },
+          "legend": {
+            "displayMode": "table",
+            "placement": "right"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        }
+      }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "tags": [
+      "promptshield",
+      "llm",
+      "tokens",
+      "latency"
+    ],
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "promptshield-prometheus"
+          },
+          "definition": "label_values(promptshield_requests_total, model)",
+          "hide": 0,
+          "includeAll": true,
+          "label": "Model",
+          "multi": true,
+          "name": "model",
+          "options": [],
+          "query": {
+            "query": "label_values(promptshield_requests_total, model)",
+            "refId": "StandardVariableQuery"
+          },
+          "refresh": 2,
+          "regex": "",
+          "sort": 1,
+          "type": "query"
+        },
+        {
+          "current": {
+            "selected": true,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "promptshield-prometheus"
+          },
+          "definition": "label_values(promptshield_requests_total, provider)",
+          "hide": 0,
+          "includeAll": true,
+          "label": "Provider",
+          "multi": true,
+          "name": "provider",
+          "options": [],
+          "query": {
+            "query": "label_values(promptshield_requests_total, provider)",
+            "refId": "StandardVariableQuery"
+          },
+          "refresh": 2,
+          "regex": "",
+          "sort": 1,
+          "type": "query"
+        }
+      ]
+    },
+    "time": {
+      "from": "now-3h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "PromptShield",
+    "uid": "promptshield-v2",
+    "version": 3
+  },
+  "overwrite": true,
+  "folderId": 0
+}

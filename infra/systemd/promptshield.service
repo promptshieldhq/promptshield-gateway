@@ -1,0 +1,42 @@
+[Unit]
+Description=PromptShield LLM Security Proxy
+Documentation=https://github.com/promptshieldhq/promptshield-proxy
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=promptshield
+Group=promptshield
+WorkingDirectory=/etc/promptshield
+
+ExecStart=/usr/local/bin/promptshield
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+
+# Config and secrets live in /etc/promptshield/
+# .env          → environment variables (API keys, ports, etc.)
+# policy.yaml   → PII/injection policy
+EnvironmentFile=-/etc/promptshield/.env
+Environment=PROMPTSHIELD_POLICY_PATH=/etc/promptshield/policy.yaml
+
+# Raise open file limit for high-throughput deployments
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+# Allow the proxy to write nothing except its own config dir
+ReadWritePaths=/etc/promptshield
+
+# Logging — readable via: journalctl -u promptshield -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=promptshield
+
+[Install]
+WantedBy=multi-user.target

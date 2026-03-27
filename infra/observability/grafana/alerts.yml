@@ -1,0 +1,58 @@
+groups:
+  - name: promptshield
+    rules:
+
+      - alert: HighBlockRate
+        expr: |
+          rate(promptshield_requests_total{action="block"}[5m])
+          / rate(promptshield_requests_total[5m]) > 0.15
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PromptShield blocking >15% of requests"
+          description: "Block rate is {{ $value | humanizePercentage }} over the last 5m"
+
+      - alert: SensitivePIIDetected
+        expr: |
+          increase(promptshield_entities_detected_total{
+            entity_type=~"CREDIT_CARD|US_SSN|IBAN_CODE"
+          }[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "High-risk PII detected: {{ $labels.entity_type }}"
+          description: "{{ $labels.entity_type }} appeared in prompts in the last 10 minutes"
+
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(promptshield_request_duration_seconds_bucket[5m]))
+          ) > 5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 5s"
+          description: "p95 end-to-end latency is {{ $value }}s — check upstream LLM health"
+
+      - alert: ErrorRateHigh
+        expr: |
+          rate(promptshield_requests_total{action="error"}[5m])
+          / rate(promptshield_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PromptShield error rate above 5%"
+          description: "Error rate is {{ $value | humanizePercentage }} — check upstream LLM and API keys"
+
+      - alert: TokenSpikeByModel
+        expr: |
+          sum by (model) (rate(promptshield_tokens_total{token_type="total"}[5m])) * 60 > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High token consumption on {{ $labels.model }}"
+          description: "{{ $labels.model }} is consuming {{ $value | humanize }} tokens/min"

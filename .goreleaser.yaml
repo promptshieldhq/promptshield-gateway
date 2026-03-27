@@ -1,0 +1,56 @@
+version: 2
+
+project_name: promptshield-proxy
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: promptshield-proxy
+    main: ./cmd/proxy
+    binary: promptshield-proxy
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - id: promptshield-proxy
+    builds:
+      - promptshield-proxy
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: promptshieldhq
+    name: promptshield-proxy
+  draft: false
+  prerelease: auto
