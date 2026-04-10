@@ -1,77 +1,48 @@
 # PromptShield proxy policy
 # actions: allow | mask | block
-# pii_min_score: ignore detections below this confidence (0.0–1.0; 0 = accept all)
 
-pii_min_score: 0.7
+pii_min_score: 0.70
 
 pii:
-  # Financial / identity — always block
+  # Financial & Identity
   CREDIT_CARD: block
   US_SSN: block
   IBAN_CODE: block
-  CRYPTO: block
-  MEDICAL_LICENSE: block
+  US_BANK_NUMBER: block
+  US_ITIN: mask
   US_PASSPORT: block
   US_DRIVER_LICENSE: block
-  US_BANK_NUMBER: block
-  NRP: block               # national/racial/political group — high sensitivity
+  CRYPTO: block
+  MEDICAL_LICENSE: block
 
-  # Contact info — mask to preserve context while hiding values
-  EMAIL_ADDRESS: mask
+  # Contact
+  EMAIL_ADDRESS: block
   PHONE_NUMBER: mask
   IP_ADDRESS: mask
-  US_ITIN: mask
+  URL: allow
 
-  # General context — safe to allow
+  # Identity
   PERSON: allow
+  ORG: allow
   LOCATION: allow
   DATE_TIME: allow
-  URL: allow
-  ORG: allow
   AGE: allow
 
-# Prompt injection — block any detected injection attempt
+
 injection:
   action: block
 
-# What to do when the detector engine is unreachable
-# fail_closed → block the request (safe default)
-# fail_open   → allow through unscanned (only if availability > security)
 on_detector_error: fail_closed
 
-# Rate limiting — uncomment to enable
-# rate_limit:
-#   requests_per_minute: 60
-#   burst: 20
-#   key_by: ip          # ip | api_key
-
-# Response scanning — scans LLM output for PII using the pii rules above
-# Streaming responses are not scanned.
-# response_scan:
-#   enabled: true
-
-# Token limits — caps cost and prevents abuse
-# max_tokens caps LLM output (overrides or reduces the client's request).
-# max_prompt_length blocks requests whose total prompt exceeds this character count (HTTP 413).
-# token_limits:
-#   max_tokens: 4096
-#   max_prompt_length: 16000
-
-# Token budgets — rolling per-client caps on cumulative token usage
-# Resets: daily → midnight UTC | weekly → Monday 00:00 UTC | monthly → 1st 00:00 UTC
-# key_by: ip (default) | api_key | global
-# State is in-memory — counters reset on proxy restart.
-# Budgets are soft caps: a small overshoot is possible under high concurrency.
+# Token budgets — rolling cumulative limits per window.
+# key_by: "global" (shared across all users) | "ip" | "api_key"
 # token_budget:
 #   daily:
 #     tokens: 100000
-#     key_by: ip
+#     key_by: api_key
 #   weekly:
 #     tokens: 500000
 #     key_by: api_key
 #   monthly:
-#     tokens: 2000000
-#     key_by: global
-
-# Security note: /metrics (Prometheus) is unauthenticated by default.
-# To expose it only internally, set: PROMPTSHIELD_METRICS_ADDR=localhost:9090
+#     tokens: 1000000
+#     key_by: api_key

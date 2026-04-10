@@ -40,6 +40,11 @@ const engineURLNone = "none" // sentinel value meaning "no detection engine"
 const (
 	keyByAPIKey = "api_key"
 	keyByGlobal = "global"
+
+	allowDefaultPolicyEnv = "PROMPTSHIELD_ALLOW_DEFAULT_POLICY"
+	publicMetricsEnv      = "PROMPTSHIELD_EXPOSE_METRICS_ON_MAIN_PORT"
+
+	defaultEnvFile = ".env"
 )
 
 func main() {
@@ -80,9 +85,9 @@ func printUsage() {
 	fmt.Print(`promptshield-proxy — LLM security proxy
 
 Usage:
-  promptshield-proxy [serve] [flags]   Start the proxy server (default)
-  promptshield-proxy validate [flags]  Validate config and print summary
-  promptshield-proxy version           Print version and exit
+  promptshield [serve] [flags]   Start the proxy server (default)
+  promptshield validate [flags]  Validate config and print summary
+  promptshield version           Print version and exit
 
 Serve flags:
   --port        PORT   Listen port                          (PROMPTSHIELD_PORT, default: 8080)
@@ -94,6 +99,10 @@ Serve flags:
   --env         PATH   .env file path                       (default: .env)
 
 Flags override environment variables; environment variables override defaults.
+
+Security toggles:
+	PROMPTSHIELD_ALLOW_DEFAULT_POLICY=true          Allow startup with fallback allow-all policy when policy file is missing (unsafe)
+	PROMPTSHIELD_EXPOSE_METRICS_ON_MAIN_PORT=true   Expose unauthenticated /metrics on main listener (unsafe)
 `)
 }
 
@@ -168,17 +177,20 @@ func runServe(log zerolog.Logger, args []string) error {
 
 	envFile := f.envFile
 	if envFile == "" {
-		envFile = ".env"
+		envFile = defaultEnvFile
 	}
 	if err := config.LoadDotEnv(envFile); err != nil {
 		return fmt.Errorf("failed to load %s: %w", envFile, err)
+	}
+	if err := os.Setenv("PROMPTSHIELD_ENV_FILE", envFile); err != nil {
+		return fmt.Errorf("failed to set PROMPTSHIELD_ENV_FILE: %w", err)
 	}
 
 	f.applyToEnv()
 	log = configureLogLevel(log, f.logLevel)
 	log.Info().Str("version", version).Msg("starting")
 
-	return serve(log)
+	return serve(log, envFile)
 }
 
 func runValidate(args []string) error {
@@ -189,7 +201,7 @@ func runValidate(args []string) error {
 
 	envFile := f.envFile
 	if envFile == "" {
-		envFile = ".env"
+		envFile = defaultEnvFile
 	}
 	if err := config.LoadDotEnv(envFile); err != nil {
 		return fmt.Errorf("failed to load %s: %w", envFile, err)
@@ -200,10 +212,14 @@ func runValidate(args []string) error {
 	if err != nil {
 		return err
 	}
+	allowDefaultPolicy := envTruthy(allowDefaultPolicyEnv)
 	var p *policy.Policy
 	if policyPath == "" {
+		if !allowDefaultPolicy {
+			return fmt.Errorf("no policy file found — set PROMPTSHIELD_POLICY_PATH or explicitly set %s=true (unsafe)", allowDefaultPolicyEnv)
+		}
 		p = policy.DefaultPolicy()
-		fmt.Println("Warning: no policy file found — using default (allow-all) policy")
+		fmt.Printf("Warning: no policy file found — using default (allow-all) policy because %s=true\n", allowDefaultPolicyEnv)
 	} else {
 		p, err = policy.Load(policyPath)
 		if err != nil {
@@ -258,6 +274,11 @@ func runValidate(args []string) error {
 		}
 	}
 
+	printValidateSummary(p, policyPath, port, provider, providers, engineURL)
+	return nil
+}
+
+func printValidateSummary(p *policy.Policy, policyPath, port, provider, providers, engineURL string) {
 	fmt.Println("Configuration valid")
 	fmt.Println()
 	if policyPath == "" {
@@ -330,19 +351,21 @@ func runValidate(args []string) error {
 	} else {
 		fmt.Printf("    PII rules           : none\n")
 	}
-
-	return nil
 }
 
-func serve(log zerolog.Logger) error {
+func serve(log zerolog.Logger, envFile string) error {
 	policyPath, err := config.ResolvePolicyPath(os.Getenv("PROMPTSHIELD_POLICY_PATH"), "config/policy.yaml")
 	if err != nil {
 		return err
 	}
+	allowDefaultPolicy := envTruthy(allowDefaultPolicyEnv)
 	var p *policy.Policy
 	if policyPath == "" {
+		if !allowDefaultPolicy {
+			return fmt.Errorf("no policy file found — set PROMPTSHIELD_POLICY_PATH or explicitly set %s=true (unsafe)", allowDefaultPolicyEnv)
+		}
 		p = policy.DefaultPolicy()
-		log.Warn().Msg("no policy file found — using default (allow-all) policy; create config/policy.yaml to configure rules")
+		log.Warn().Str("env", allowDefaultPolicyEnv).Msg("no policy file found — using default (allow-all) policy due to explicit unsafe override")
 	} else {
 		p, err = policy.Load(policyPath)
 		if err != nil {
@@ -393,7 +416,7 @@ func serve(log zerolog.Logger) error {
 		limiter = ratelimit.New(rl.RequestsPerMinute, rl.Burst, rl.KeyBy)
 		log.Info().Int("rpm", rl.RequestsPerMinute).Int("burst", rl.Burst).Str("key_by", rl.KeyBy).Msg("rate limiting enabled")
 		if rl.KeyBy != keyByAPIKey {
-			log.Warn().Msg("IP rate limiting trusts X-Real-IP — ensure a reverse proxy sets this header, or clients can spoof it")
+			log.Warn().Msg("IP rate limiting uses RemoteAddr unless request comes from loopback or PROMPTSHIELD_TRUST_PROXY_CIDRS")
 		}
 	}
 
@@ -422,14 +445,19 @@ func serve(log zerolog.Logger) error {
 
 	metricsHandler := promhttp.HandlerFor(metrics.Registry, promhttp.HandlerOpts{})
 	metricsAddr := strings.TrimSpace(os.Getenv("PROMPTSHIELD_METRICS_ADDR"))
+	publicMetricsEnabled := envTruthy(publicMetricsEnv)
 
 	mux := http.NewServeMux()
 	mux.Handle("POST "+chatRoute, handler)
 	mux.HandleFunc("GET /health", handleHealth)
-	if metricsAddr == "" {
+	adminAPI := newAdminAPI(log, policyPath, envFile, handler.ReloadPolicy)
+	adminAPI.registerRoutes(mux)
+	if publicMetricsEnabled {
 		// Warning: the /metrics endpoint is unauthenticated.
 		mux.Handle("GET /metrics", metricsHandler)
-		log.Warn().Msg("/metrics is exposed on the public port, set PROMPTSHIELD_METRICS_ADDR to bind it to an internal address")
+		log.Warn().Str("env", publicMetricsEnv).Msg("/metrics is exposed on the public port due to explicit unsafe override")
+	} else if metricsAddr == "" {
+		log.Info().Msg("/metrics is disabled on the public port; set PROMPTSHIELD_METRICS_ADDR for an internal metrics listener")
 	}
 
 	certFile := os.Getenv("PROMPTSHIELD_TLS_CERT")
@@ -571,7 +599,7 @@ func initBudget(log zerolog.Logger, tb *policy.TokenBudgetPolicy) *budget.Tracke
 		}
 	}
 	if budgetUsesIP {
-		log.Warn().Msg("IP-based token budget trusts X-Real-IP — ensure a reverse proxy sets this header, or clients can spoof it")
+		log.Warn().Msg("IP-based token budget uses RemoteAddr unless request comes from loopback or PROMPTSHIELD_TRUST_PROXY_CIDRS")
 	}
 	return tracker
 }
@@ -731,4 +759,14 @@ func handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","service":"promptshield-proxy"}`)) //nolint:errcheck // health check, write errors are inconsequential
+}
+
+func envTruthy(name string) bool {
+	v := strings.TrimSpace(os.Getenv(name))
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

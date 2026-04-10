@@ -1,0 +1,31 @@
+services:
+  promptshield-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: promptshield-proxy
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    environment:
+      PROMPTSHIELD_PORT: "8080"
+      PROMPTSHIELD_ENGINE_URL: "http://promptshield-engine:4321"
+      PROMPTSHIELD_ENGINE_API_KEY: "${PROMPTSHIELD_ENGINE_API_KEY:-dev-engine-key}"
+      PROXY_ADMIN_TOKEN: "${PROXY_ADMIN_TOKEN:-dev-proxy-admin-token}"
+      PROMPTSHIELD_POLICY_PATH: "/policy/policy.yaml"
+    volumes:
+      - promptshield_policy:/policy
+    ports:
+      - "8080:8080"
+    networks:
+      - promptshield
+
+networks:
+  promptshield:
+    external: true
+    name: promptshield
+
+volumes:
+  promptshield_policy:
+    external: true
+    name: promptshield_policy
