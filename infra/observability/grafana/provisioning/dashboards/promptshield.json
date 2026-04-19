@@ -3,7 +3,7 @@
     "annotations": {
       "list": []
     },
-    "description": "PromptShield LLM security proxy \u2014 tokens, requests, latency, model breakdown",
+    "description": "PromptShield LLM security gateway \u2014 tokens, requests, latency, model breakdown",
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 1,

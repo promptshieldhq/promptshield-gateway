@@ -1,8 +1,11 @@
 package metrics
 
 import (
+	"strings"
+	"unicode"
+
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/promptshieldhq/promptshield-proxy/internal/audit"
+	"github.com/promptshieldhq/promptshield-gateway/internal/audit"
 )
 
 // Registry is a clean Prometheus registry — no default Go runtime metrics.
@@ -32,8 +35,8 @@ var (
 
 	injectionsDetectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_injections_detected_total",
-		Help: "Total prompt injection attacks detected, labeled by provider and model.",
-	}, []string{"provider", "model"})
+		Help: "Total prompt injection attacks detected, labeled by provider, model, and injection reason.",
+	}, []string{"provider", "model", "reason"})
 
 	responseScansTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_response_scans_total",
@@ -55,11 +58,64 @@ func init() {
 // maxModelLabelLen caps the model label to prevent unbounded Prometheus cardinality.
 const maxModelLabelLen = 64
 
+// maxEntityTypeLabelLen limits entity labels to a small bounded size.
+const maxEntityTypeLabelLen = 48
+
 func normalizeModelLabel(model string) string {
-	if len(model) <= maxModelLabelLen {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "unknown"
+	}
+	runes := []rune(model)
+	if len(runes) <= maxModelLabelLen {
 		return model
 	}
-	return model[:maxModelLabelLen]
+	return string(runes[:maxModelLabelLen])
+}
+
+func normalizeEntityTypeLabel(entityType string) string {
+	entityType = strings.TrimSpace(strings.ToUpper(entityType))
+	if entityType == "" {
+		return "UNKNOWN"
+	}
+
+	runes := make([]rune, 0, len(entityType))
+	for _, r := range entityType {
+		switch {
+		case unicode.IsUpper(r), unicode.IsDigit(r), r == '_':
+			runes = append(runes, r)
+		case r == '-' || unicode.IsSpace(r):
+			runes = append(runes, '_')
+		}
+		if len(runes) >= maxEntityTypeLabelLen {
+			break
+		}
+	}
+
+	if len(runes) == 0 {
+		return "OTHER"
+	}
+	return string(runes)
+}
+
+func normalizeInjectionReasonLabel(reason string) string {
+	r := strings.ToLower(strings.TrimSpace(reason))
+	if r == "" {
+		return "unknown"
+	}
+
+	switch {
+	case strings.Contains(r, "jailbreak"):
+		return "jailbreak"
+	case strings.Contains(r, "system prompt") || strings.Contains(r, "prompt leak") || strings.Contains(r, "exfil"):
+		return "prompt_leak"
+	case strings.Contains(r, "ignore") || strings.Contains(r, "override") || strings.Contains(r, "instruction"):
+		return "instruction_override"
+	case strings.Contains(r, "tool") || strings.Contains(r, "function call"):
+		return "tool_misuse"
+	default:
+		return "other"
+	}
 }
 
 func Record(ev audit.Event) {
@@ -74,11 +130,12 @@ func Record(ev audit.Event) {
 	}
 
 	for _, entityType := range ev.EntitiesDetected {
-		entitiesDetectedTotal.WithLabelValues(entityType, ev.Provider).Inc()
+		entitiesDetectedTotal.WithLabelValues(normalizeEntityTypeLabel(entityType), ev.Provider).Inc()
 	}
 
 	if ev.InjectionDetected {
-		injectionsDetectedTotal.WithLabelValues(ev.Provider, model).Inc()
+		reason := normalizeInjectionReasonLabel(ev.InjectionReason)
+		injectionsDetectedTotal.WithLabelValues(ev.Provider, model, reason).Inc()
 	}
 
 	if ev.ResponseScanned {

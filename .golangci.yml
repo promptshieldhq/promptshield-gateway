@@ -173,10 +173,16 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+    rules:
+      - path: internal/gateway/(adapter|anthropic|gemini|openai)\.go
+        linters:
+          - gosec
+        text: "G107"
     paths:
       - third_party$
       - builtin$
       - examples$
+      - ^tests(/|$)
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
@@ -191,3 +197,4 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - ^tests(/|$)

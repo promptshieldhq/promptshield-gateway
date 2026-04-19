@@ -1,6 +1,4 @@
-// Package budget tracks cumulative token usage per client over rolling windows
-// (daily, weekly, monthly) and blocks requests once a configured limit is reached.
-// All state is in-memory; counters reset on proxy restart.
+// Package budget tracks per-client token usage in daily/weekly/monthly windows.
 package budget
 
 import (
@@ -9,12 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/promptshieldhq/promptshield-proxy/internal/config"
-	"github.com/promptshieldhq/promptshield-proxy/internal/policy"
+	"github.com/promptshieldhq/promptshield-gateway/internal/config"
+	"github.com/promptshieldhq/promptshield-gateway/internal/policy"
 )
 
-// maxEntries caps the number of per-client entries to prevent memory exhaustion
-// when an attacker cycles through many unique api_key tokens.
+// State is in memory and resets on restart.
+
+// Max number of tracked client entries.
 const maxEntries = 100_000
 
 type entry struct {
@@ -22,7 +21,7 @@ type entry struct {
 	windowStart time.Time
 }
 
-// Tracker counts token usage per client per rolling time window and enforces budget caps.
+// Tracker enforces token budgets per client.
 // Safe for concurrent use.
 type Tracker struct {
 	mu       sync.Mutex
@@ -32,7 +31,7 @@ type Tracker struct {
 	stopOnce sync.Once
 }
 
-// New creates a Tracker for the given budget policy and starts a background eviction goroutine.
+// New creates a tracker and starts background eviction.
 func New(p *policy.TokenBudgetPolicy) *Tracker {
 	t := &Tracker{
 		entries: make(map[string]*entry),
@@ -43,12 +42,12 @@ func New(p *policy.TokenBudgetPolicy) *Tracker {
 	return t
 }
 
-// Stop terminates the background eviction goroutine. Safe to call multiple times.
+// Stop ends background eviction. Safe to call multiple times.
 func (t *Tracker) Stop() {
 	t.stopOnce.Do(func() { close(t.done) })
 }
 
-// Check returns (false, reason) if any configured budget window is exhausted for this client.
+// Check reports whether the request is still within budget.
 func (t *Tracker) Check(r *http.Request) (bool, string) {
 	now := time.Now().UTC()
 	p := t.policy
@@ -81,7 +80,7 @@ func (t *Tracker) Check(r *http.Request) (bool, string) {
 	return true, ""
 }
 
-// Record adds tokens to the running total for every configured window for this client.
+// Record adds tokens to all active budget windows.
 func (t *Tracker) Record(r *http.Request, tokens int) {
 	if tokens <= 0 {
 		return
@@ -106,8 +105,8 @@ func (t *Tracker) Record(r *http.Request, tokens int) {
 	}
 }
 
-// getOrReset returns the entry for key, resetting it if the window has expired.
-// Must be called with t.mu held.
+// getOrReset returns the entry for key and resets it when the window changes.
+// Caller must hold t.mu.
 func (t *Tracker) getOrReset(key string, windowStart time.Time) *entry {
 	e, ok := t.entries[key]
 	if !ok || e.windowStart.Before(windowStart) {
@@ -120,8 +119,8 @@ func (t *Tracker) getOrReset(key string, windowStart time.Time) *entry {
 	return e
 }
 
-// evictOldest removes the entry with the earliest windowStart.
-// Must be called with t.mu held.
+// evictOldest removes the oldest window entry.
+// Caller must hold t.mu.
 func (t *Tracker) evictOldest() {
 	var oldestKey string
 	var oldestTime time.Time
@@ -142,6 +141,32 @@ func resolveKey(r *http.Request, keyBy string) string {
 	return config.ResolveRequestKey(r, keyBy)
 }
 
+// TrackerSnapshot is a copy of tracker state for reload migration.
+type TrackerSnapshot struct {
+	Entries map[string]entry
+}
+
+// Snapshot copies current budget entries.
+func (t *Tracker) Snapshot() TrackerSnapshot {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	snap := TrackerSnapshot{Entries: make(map[string]entry, len(t.entries))}
+	for k, e := range t.entries {
+		snap.Entries[k] = *e
+	}
+	return snap
+}
+
+// MigrateFrom loads prior state so budgets survive policy reload.
+// Call before serving requests.
+func (t *Tracker) MigrateFrom(snap TrackerSnapshot) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k, e := range snap.Entries {
+		t.entries[k] = &e
+	}
+}
+
 func (t *Tracker) evictLoop() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
@@ -155,7 +180,7 @@ func (t *Tracker) evictLoop() {
 	}
 }
 
-// evict removes entries whose window started more than 32 days ago.
+// evict removes entries older than 32 days.
 func (t *Tracker) evict() {
 	cutoff := time.Now().UTC().AddDate(0, 0, -32)
 	t.mu.Lock()
@@ -166,8 +191,6 @@ func (t *Tracker) evict() {
 		}
 	}
 }
-
-// ── Window start helpers ───────────────────────────────────────────────────────
 
 func dailyWindowStart(now time.Time) time.Time {
 	y, m, d := now.Date()

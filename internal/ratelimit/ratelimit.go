@@ -1,11 +1,13 @@
 package ratelimit
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/promptshieldhq/promptshield-proxy/internal/config"
+	"github.com/promptshieldhq/promptshield-gateway/internal/config"
 )
 
 // maxBuckets caps per-client entries to prevent memory exhaustion when an attacker cycles through many unique api_key tokens.
@@ -57,6 +59,7 @@ func (l *Limiter) Allow(r *http.Request) bool {
 	b, ok := l.buckets[key]
 	if !ok {
 		if len(l.buckets) >= maxBuckets {
+			fmt.Fprintf(os.Stderr, "ratelimit: bucket table full (%d entries) — evicting LRU; possible key-cycling attack\n", maxBuckets)
 			l.evictLRU()
 		}
 		b = &bucket{tokens: l.burst, lastCheck: now}
@@ -120,4 +123,45 @@ func (l *Limiter) evictLRU() {
 
 func (l *Limiter) extractKey(r *http.Request) string {
 	return config.ResolveRequestKey(r, l.keyBy)
+}
+
+// KeyBy returns the key strategy ("ip" or "api_key") this limiter uses.
+func (l *Limiter) KeyBy() string { return l.keyBy }
+
+// LimiterSnapshot is a point-in-time copy of bucket state for migration.
+type LimiterSnapshot struct {
+	KeyBy   string
+	Buckets map[string]bucket
+}
+
+// Snapshot returns a copy of current bucket state. Used to migrate counters to a
+// new limiter when policy reloads so per-client allowances are not reset.
+func (l *Limiter) Snapshot() LimiterSnapshot {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	snap := LimiterSnapshot{
+		KeyBy:   l.keyBy,
+		Buckets: make(map[string]bucket, len(l.buckets)),
+	}
+	for k, b := range l.buckets {
+		snap.Buckets[k] = *b
+	}
+	return snap
+}
+
+// MigrateFrom pre-loads bucket state from a previous limiter's snapshot.
+// Only migrates when the key strategy is unchanged; clamps tokens to the new burst limit.
+// Must be called before the limiter handles any requests.
+func (l *Limiter) MigrateFrom(snap LimiterSnapshot) {
+	if snap.KeyBy != l.keyBy {
+		return // key strategy changed; old keys no longer meaningful
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for k, b := range snap.Buckets {
+		if b.tokens > l.burst {
+			b.tokens = l.burst
+		}
+		l.buckets[k] = &bucket{tokens: b.tokens, lastCheck: b.lastCheck}
+	}
 }

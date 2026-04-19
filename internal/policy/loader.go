@@ -22,6 +22,12 @@ var validDetectorErrors = map[string]bool{
 	"fail_closed": true,
 }
 
+var validUnknownEntityActions = map[string]bool{"": true, "allow": true, "block": true}
+
+var validRateLimitKeyBy = map[string]bool{"": true, "ip": true, "api_key": true}
+
+var validBudgetKeyBy = map[string]bool{"": true, "ip": true, "api_key": true, "global": true}
+
 func Load(path string) (*Policy, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -55,12 +61,39 @@ func validate(p *Policy) error {
 		return fmt.Errorf("pii_min_score must be between 0.0 and 1.0, got %g", p.PIIMinScore)
 	}
 
-	for entityType, action := range p.PII {
-		if !validActions[action] {
-			return fmt.Errorf("invalid action %q for entity %q: must be allow, mask, or block", action, entityType)
+	validators := []func(*Policy) error{
+		validatePIIEntities,
+		validateInjectionAction,
+		validateOnDetectorError,
+		validateOnUnknownEntity,
+		validateRateLimit,
+		validateTokenLimits,
+		validateTokenBudget,
+	}
+
+	for _, fn := range validators {
+		if err := fn(p); err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+func validatePIIEntities(p *Policy) error {
+	for entityType, ep := range p.PII {
+		if !validActions[ep.Action] {
+			return fmt.Errorf("invalid action %q for entity %q: must be allow, mask, or block", ep.Action, entityType)
+		}
+		if ep.MinScore != nil && (*ep.MinScore < 0 || *ep.MinScore > 1) {
+			return fmt.Errorf("min_score for entity %q must be between 0.0 and 1.0, got %g", entityType, *ep.MinScore)
+		}
+	}
+
+	return nil
+}
+
+func validateInjectionAction(p *Policy) error {
 	switch p.Injection.Action {
 	case "", ActionAllow, ActionBlock:
 		// valid
@@ -70,10 +103,26 @@ func validate(p *Policy) error {
 		return fmt.Errorf("invalid injection action %q: must be allow or block", p.Injection.Action)
 	}
 
+	return nil
+}
+
+func validateOnDetectorError(p *Policy) error {
 	if p.OnDetectorError != "" && !validDetectorErrors[p.OnDetectorError] {
 		return fmt.Errorf("invalid on_detector_error %q: must be fail_open or fail_closed", p.OnDetectorError)
 	}
 
+	return nil
+}
+
+func validateOnUnknownEntity(p *Policy) error {
+	if !validUnknownEntityActions[p.OnUnknownEntity] {
+		return fmt.Errorf("invalid on_unknown_entity %q: must be allow or block", p.OnUnknownEntity)
+	}
+
+	return nil
+}
+
+func validateRateLimit(p *Policy) error {
 	if rl := p.RateLimit; rl != nil {
 		if rl.RequestsPerMinute <= 0 {
 			return fmt.Errorf("rate_limit.requests_per_minute must be a positive integer")
@@ -81,11 +130,15 @@ func validate(p *Policy) error {
 		if rl.Burst <= 0 {
 			return fmt.Errorf("rate_limit.burst must be a positive integer")
 		}
-		if rl.KeyBy != "" && rl.KeyBy != "ip" && rl.KeyBy != "api_key" {
+		if !validRateLimitKeyBy[rl.KeyBy] {
 			return fmt.Errorf("rate_limit.key_by must be ip or api_key")
 		}
 	}
 
+	return nil
+}
+
+func validateTokenLimits(p *Policy) error {
 	if tl := p.TokenLimits; tl != nil {
 		if tl.MaxTokens < 0 {
 			return fmt.Errorf("token_limits.max_tokens must be >= 0")
@@ -95,32 +148,34 @@ func validate(p *Policy) error {
 		}
 	}
 
+	return nil
+}
+
+func validateTokenBudget(p *Policy) error {
 	if tb := p.TokenBudget; tb != nil {
-		validBudgetKeyBy := map[string]bool{"": true, "ip": true, "api_key": true, "global": true}
-		if tb.Daily != nil {
-			if tb.Daily.Tokens < 0 {
-				return fmt.Errorf("token_budget.daily.tokens must be >= 0")
-			}
-			if !validBudgetKeyBy[tb.Daily.KeyBy] {
-				return fmt.Errorf("token_budget.daily.key_by %q must be ip, api_key, or global", tb.Daily.KeyBy)
-			}
+		if err := validateTokenBudgetWindow("daily", tb.Daily); err != nil {
+			return err
 		}
-		if tb.Weekly != nil {
-			if tb.Weekly.Tokens < 0 {
-				return fmt.Errorf("token_budget.weekly.tokens must be >= 0")
-			}
-			if !validBudgetKeyBy[tb.Weekly.KeyBy] {
-				return fmt.Errorf("token_budget.weekly.key_by %q must be ip, api_key, or global", tb.Weekly.KeyBy)
-			}
+		if err := validateTokenBudgetWindow("weekly", tb.Weekly); err != nil {
+			return err
 		}
-		if tb.Monthly != nil {
-			if tb.Monthly.Tokens < 0 {
-				return fmt.Errorf("token_budget.monthly.tokens must be >= 0")
-			}
-			if !validBudgetKeyBy[tb.Monthly.KeyBy] {
-				return fmt.Errorf("token_budget.monthly.key_by %q must be ip, api_key, or global", tb.Monthly.KeyBy)
-			}
+		if err := validateTokenBudgetWindow("monthly", tb.Monthly); err != nil {
+			return err
 		}
+	}
+
+	return nil
+}
+
+func validateTokenBudgetWindow(name string, window *TokenBudgetWindow) error {
+	if window == nil {
+		return nil
+	}
+	if window.Tokens < 0 {
+		return fmt.Errorf("token_budget.%s.tokens must be >= 0", name)
+	}
+	if !validBudgetKeyBy[window.KeyBy] {
+		return fmt.Errorf("token_budget.%s.key_by %q must be ip, api_key, or global", name, window.KeyBy)
 	}
 
 	return nil

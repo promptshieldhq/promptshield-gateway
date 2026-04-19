@@ -1,12 +1,22 @@
-# PromptShield proxy policy
+# PromptShield gateway policy
 # actions: allow | mask | block
+#
+# Per-entity entries accept either a plain action string or an object with an
+# optional min_score that overrides the global pii_min_score for that entity:
+#
+#   US_SSN: block                        # shorthand — inherits pii_min_score
+#   US_SSN:
+#     action: block
+#     min_score: 0.90                    # only block when confidence >= 0.90
 
 pii_min_score: 0.70
 
 pii:
   # Financial & Identity
   CREDIT_CARD: block
-  US_SSN: block
+  US_SSN:
+    action: block
+    min_score: 0.85
   IBAN_CODE: block
   US_BANK_NUMBER: block
   US_ITIN: mask
@@ -16,9 +26,9 @@ pii:
   MEDICAL_LICENSE: block
 
   # Contact
-  EMAIL_ADDRESS: block
-  PHONE_NUMBER: mask
-  IP_ADDRESS: mask
+  EMAIL_ADDRESS: allow
+  PHONE_NUMBER: allow
+  IP_ADDRESS: allow
   URL: allow
 
   # Identity
@@ -28,21 +38,63 @@ pii:
   DATE_TIME: allow
   AGE: allow
 
+  # Secrets detected by Gitleaks (entity types match gitleaks rule IDs exactly)
+  # AWS
+  # WARNING: AWS_ACCESS_TOKEN (AKIA… key IDs) are not secret on their own — the
+  # secret access key is what grants access. Change to `block` if you operate in
+  # an environment where key IDs themselves should not be forwarded.
+  AWS_ACCESS_TOKEN: allow
+  AWS_SECRET_ACCESS_KEY: block      # 40-char secret — block always
+
+  # Anthropic / OpenAI
+  ANTHROPIC_API_KEY: block
+  ANTHROPIC_ADMIN_API_KEY: block
+  # WARNING: set to `block` if you do not want OpenAI API keys forwarded to
+  # upstream models — e.g. when users paste keys into prompts for other purposes.
+  OPENAI_API_KEY: allow
+
+  # Source control
+  GITHUB_PAT: block
+  GITHUB_FINE_GRAINED_PAT: block
+  GITLAB_PAT: block
+
+  # Stripe
+  STRIPE_ACCESS_TOKEN: block
+  STRIPE_API_KEY: block
+
+  # Private keys — ALL private key types (RSA, PKCS8, OPENSSH, PGP) map to PRIVATE_KEY
+  PRIVATE_KEY: block
+
+  # GCP
+  GCP_API_KEY: block
+  GCP_SERVICE_ACCOUNT: block
+
+  # Slack
+  SLACK_APP_TOKEN: block
+  SLACK_BOT_TOKEN: block
+  SLACK_USER_TOKEN: block
+  SLACK_WEBHOOK_URL: block
+
+  # Other services
+  TWILIO_API_KEY: block
+  SENDGRID_API_TOKEN: block
+  NPM_ACCESS_TOKEN: block
+  PYPI_UPLOAD_TOKEN: block
+
+  # Generic — catches passwords, client_secret, auth_token, api_key= patterns
+  JWT: block
+  GENERIC_API_KEY: block
+
+  # Engine-specific types (detection engine only — no Gitleaks equivalent)
+  BEARER_TOKEN: block           # Authorization: Bearer <token> pasted in prompt
+  DISCORD_BOT_TOKEN: block
+  TELEGRAM_BOT_TOKEN: block
+  MAILCHIMP_KEY: block
+  AZURE_STORAGE_KEY: block
+  HIGH_ENTROPY_HEX: allow       # Too many false positives to block by default
+  HIGH_ENTROPY_BASE64: allow    # Too many false positives to block by default
 
 injection:
   action: block
 
 on_detector_error: fail_closed
-
-# Token budgets — rolling cumulative limits per window.
-# key_by: "global" (shared across all users) | "ip" | "api_key"
-# token_budget:
-#   daily:
-#     tokens: 100000
-#     key_by: api_key
-#   weekly:
-#     tokens: 500000
-#     key_by: api_key
-#   monthly:
-#     tokens: 1000000
-#     key_by: api_key

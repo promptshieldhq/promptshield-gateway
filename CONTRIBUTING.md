@@ -1,4 +1,4 @@
-# Contributing to promptshield-proxy
+# Contributing to promptshield-gateway
 
 MIT-licensed. PRs welcome.
 
@@ -8,7 +8,7 @@ MIT-licensed. PRs welcome.
 2. Install Go (see `go.mod` for the required version).
 3. Install [golangci-lint](https://golangci-lint.run/welcome/install/) for linting.
 4. Copy `.env.example` to `.env` and fill in your keys.
-5. Run the proxy: `go run ./cmd/proxy`
+5. Run the gateway: `make run`
 
 ## Making changes
 

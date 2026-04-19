@@ -5,8 +5,7 @@ import (
 	"sync/atomic"
 )
 
-// KeyPool rotates through one or more API keys in round-robin order.
-// Keys are provided as a comma-separated string: key1,key2,key3
+// KeyPool rotates API keys in round-robin order.
 type KeyPool struct {
 	keys    []string
 	counter atomic.Uint64
@@ -25,7 +24,7 @@ func NewKeyPool(raw string) *KeyPool {
 
 func (p *KeyPool) Len() int { return len(p.keys) }
 
-// Pick returns the next key in round-robin order, or "" if the pool is empty.
+// Pick returns the next key, or "" if empty.
 func (p *KeyPool) Pick() string {
 	if len(p.keys) == 0 {
 		return ""

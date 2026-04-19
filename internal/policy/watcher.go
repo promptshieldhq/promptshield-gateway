@@ -51,43 +51,18 @@ func (w *Watcher) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			w.mu.Lock()
-			w.stopped = true
-			w.mu.Unlock()
-			if debounce != nil {
-				debounce.Stop()
-			}
+			w.markStopped()
+			stopDebounceTimer(debounce)
 			return
 
 		case event, ok := <-fw.Events:
 			if !ok {
 				return
 			}
-			if filepath.Base(event.Name) != base {
+			if !isPolicyFileEvent(event, base) {
 				continue
 			}
-			if !event.Has(fsnotify.Write) && !event.Has(fsnotify.Create) {
-				continue
-			}
-			if debounce != nil {
-				debounce.Stop()
-			}
-			debounce = time.AfterFunc(debounceDuration, func() {
-				w.mu.Lock()
-				if w.stopped {
-					w.mu.Unlock()
-					return
-				}
-				w.mu.Unlock()
-
-				p, err := Load(w.path)
-				if err != nil {
-					w.log.Error().Err(err).Str("path", w.path).Msg("policy watcher: reload failed — keeping previous policy")
-				} else {
-					w.log.Info().Str("path", w.path).Msg("policy watcher: policy reloaded")
-				}
-				w.onChange(p, err)
-			})
+			debounce = w.scheduleReload(debounce)
 
 		case err, ok := <-fw.Errors:
 			if !ok {
@@ -96,4 +71,52 @@ func (w *Watcher) Start(ctx context.Context) {
 			w.log.Warn().Err(err).Msg("policy watcher: fsnotify error")
 		}
 	}
+}
+
+func (w *Watcher) markStopped() {
+	w.mu.Lock()
+	w.stopped = true
+	w.mu.Unlock()
+}
+
+func stopDebounceTimer(timer *time.Timer) {
+	if timer != nil {
+		timer.Stop()
+	}
+}
+
+func isPolicyFileEvent(event fsnotify.Event, base string) bool {
+	if filepath.Base(event.Name) != base {
+		return false
+	}
+	// Rename is included because atomic writes (os.Rename) on some editors/Linux
+	// emit only a Rename event for the destination file rather than Create.
+	return event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Rename)
+}
+
+func (w *Watcher) scheduleReload(existing *time.Timer) *time.Timer {
+	stopDebounceTimer(existing)
+
+	return time.AfterFunc(debounceDuration, func() {
+		if w.isStopped() {
+			return
+		}
+		w.reloadPolicy()
+	})
+}
+
+func (w *Watcher) isStopped() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.stopped
+}
+
+func (w *Watcher) reloadPolicy() {
+	p, err := Load(w.path)
+	if err != nil {
+		w.log.Error().Err(err).Str("path", w.path).Msg("policy watcher: reload failed — keeping previous policy")
+	} else {
+		w.log.Info().Str("path", w.path).Msg("policy watcher: policy reloaded")
+	}
+	w.onChange(p, err)
 }

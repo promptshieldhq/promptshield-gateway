@@ -11,13 +11,16 @@ SYSTEMD    := /etc/systemd/system
 ## dev
 
 build:
-	go build -o bin/$(BINARY) ./cmd/proxy
+	go build -o bin/$(BINARY) ./cmd/gateway
 
 run:
-	go run ./cmd/proxy
+	go run ./cmd/gateway
 
 test:
 	go test -race ./...
+
+fmt:
+	gofmt -w .
 
 tidy:
 	go mod tidy
@@ -26,7 +29,7 @@ lint:
 	golangci-lint run ./...
 
 docker:
-	docker build -t promptshield-proxy .
+	docker build -t promptshield-gateway .
 
 # Run the built image. Mount your policy file and pass env vars:
 #   make docker-run ANTHROPIC_API_KEY=sk-ant-...
@@ -34,7 +37,7 @@ docker-run:
 	docker run --rm -p 8080:8080 \
 		-v $(PWD)/config/policy.yaml:/app/config/policy.yaml:ro \
 		--env-file .env \
-		promptshield-proxy
+		promptshield-gateway
 
 ## install
 
@@ -75,4 +78,4 @@ uninstall:
 	@echo "Binary and service removed. Config preserved at $(CONFIG_DIR)"
 	@echo "Remove manually if no longer needed: sudo rm -rf $(CONFIG_DIR)"
 
-.PHONY: build run test tidy lint docker docker-run install install-service uninstall
+.PHONY: build run test fmt tidy lint docker docker-run install install-service uninstall

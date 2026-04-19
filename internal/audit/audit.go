@@ -10,11 +10,13 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/promptshieldhq/promptshield-gateway/internal/config"
 )
 
-// Event is written as NDJSON to stdout for every request.
-// Application logs (zerolog) go to stderr so the two streams can be separated.
+// Event is emitted as NDJSON on stdout; app logs stay on stderr.
 type Event struct {
 	RequestID         string   `json:"request_id"`
 	Timestamp         string   `json:"timestamp"`
@@ -35,26 +37,34 @@ type Event struct {
 	PolicyHash        string   `json:"policy_hash"`
 }
 
+// Max in-flight audit pushes; extra events are dropped with a warning.
+const maxConcurrentPushes = 32
+
+var fallbackRequestIDCounter uint64
+
 type Logger struct {
 	mu         sync.Mutex
-	enc        *json.Encoder
 	ingestURL  string
 	ingestKey  string
 	httpClient *http.Client
+	pushSem    chan struct{} // nil when HTTP push is off
 }
 
-// NewLogger creates a Logger. If PROMPTSHIELD_AUDIT_URL is set, audit events
-// are also pushed directly to the dashboard ingest endpoint — no log-fwd
-// process required when running outside docker-compose.
+// NewLogger optionally enables direct HTTP push when PROMPTSHIELD_AUDIT_URL is set.
 func NewLogger() *Logger {
-	l := &Logger{
-		enc: json.NewEncoder(os.Stdout),
-	}
+	l := &Logger{}
 	if raw := strings.TrimSpace(os.Getenv("PROMPTSHIELD_AUDIT_URL")); raw != "" {
-		l.ingestURL = strings.TrimRight(raw, "/") + "/internal/audit/ingest"
-		l.ingestKey = os.Getenv("AUDIT_INGEST_SECRET")
-		l.httpClient = &http.Client{Timeout: 5 * time.Second}
-		fmt.Fprintf(os.Stderr, "audit: HTTP push enabled → %s\n", l.ingestURL)
+		if err := config.ValidateURL(raw); err != nil {
+			fmt.Fprintf(os.Stderr, "audit: PROMPTSHIELD_AUDIT_URL invalid (%v) — HTTP push disabled\n", err)
+		} else if err := config.ValidateNotLinkLocalURL(raw); err != nil {
+			fmt.Fprintf(os.Stderr, "audit: PROMPTSHIELD_AUDIT_URL invalid (%v) — HTTP push disabled\n", err)
+		} else {
+			l.ingestURL = strings.TrimRight(raw, "/") + "/internal/audit/ingest"
+			l.ingestKey = os.Getenv("AUDIT_INGEST_SECRET")
+			l.httpClient = &http.Client{Timeout: 5 * time.Second}
+			l.pushSem = make(chan struct{}, maxConcurrentPushes)
+			fmt.Fprintf(os.Stderr, "audit: HTTP push enabled → %s\n", l.ingestURL)
+		}
 	}
 	return l
 }
@@ -68,13 +78,25 @@ func (l *Logger) Emit(e Event) {
 		fmt.Fprintf(os.Stderr, "audit: failed to encode event %s: %v\n", e.RequestID, err)
 		return
 	}
-	// Always write to stdout (docker-compose log-fwd picks this up).
-	os.Stdout.Write(data)
-	os.Stdout.WriteString("\n")
+	if _, err := os.Stdout.Write(data); err != nil {
+		fmt.Fprintf(os.Stderr, "audit: failed to write event %s: %v\n", e.RequestID, err)
+		return
+	}
+	if _, err := os.Stdout.WriteString("\n"); err != nil {
+		fmt.Fprintf(os.Stderr, "audit: failed to write newline after event %s: %v\n", e.RequestID, err)
+	}
 
-	// Also push directly to the dashboard when PROMPTSHIELD_AUDIT_URL is set.
+	// Optionally push to dashboard with bounded concurrency.
 	if l.httpClient != nil {
-		go l.push(e.RequestID, data)
+		select {
+		case l.pushSem <- struct{}{}:
+			go func() {
+				defer func() { <-l.pushSem }()
+				l.push(e.RequestID, data)
+			}()
+		default:
+			fmt.Fprintf(os.Stderr, "audit: push semaphore full (%d slots), dropping event %s\n", maxConcurrentPushes, e.RequestID)
+		}
 	}
 }
 
@@ -84,7 +106,7 @@ func (l *Logger) push(requestID string, body []byte) {
 		fmt.Fprintf(os.Stderr, "audit: push build request error %s: %v\n", requestID, err)
 		return
 	}
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/json")
 	if l.ingestKey != "" {
 		req.Header.Set("x-ingest-secret", l.ingestKey)
 	}
@@ -102,7 +124,10 @@ func (l *Logger) push(requestID string, body []byte) {
 func NewRequestID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		panic(fmt.Sprintf("crypto/rand.Read: %v", err))
+		counter := atomic.AddUint64(&fallbackRequestIDCounter, 1)
+		ts := time.Now().UTC().UnixNano()
+		fmt.Fprintf(os.Stderr, "audit: crypto/rand unavailable, using fallback request id: %v\n", err)
+		return fmt.Sprintf("%x%x", ts, counter)
 	}
 	return hex.EncodeToString(b)
 }

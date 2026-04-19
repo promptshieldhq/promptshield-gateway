@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/promptshieldhq/promptshield-proxy/internal/detector"
+	"github.com/promptshieldhq/promptshield-gateway/internal/detector"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,7 +30,12 @@ func Mask(text string, entities []detector.Entity) string {
 		return text
 	}
 
-	sort.Slice(valid, func(i, j int) bool { return valid[i].Start < valid[j].Start })
+	sort.Slice(valid, func(i, j int) bool {
+		if valid[i].Start != valid[j].Start {
+			return valid[i].Start < valid[j].Start
+		}
+		return valid[i].End > valid[j].End
+	})
 
 	var buf strings.Builder
 	buf.Grow(len(text))

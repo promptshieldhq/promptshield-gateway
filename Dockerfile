@@ -10,7 +10,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build \
     -ldflags="-s -w" \
     -o promptshield \
-    ./cmd/proxy
+    ./cmd/gateway
 
 FROM alpine:3.21
 

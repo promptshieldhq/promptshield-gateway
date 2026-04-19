@@ -24,7 +24,34 @@ const (
 	ActionBlock Action = "block"
 )
 
-type PIIPolicy map[string]Action
+// PIIEntityPolicy defines the action and optional per-entity confidence threshold.
+// It unmarshals from either a plain action string ("block") or an object
+// ({action: block, min_score: 0.85}), so existing policy files stay compatible.
+type PIIEntityPolicy struct {
+	Action   Action   `yaml:"action"`
+	MinScore *float64 `yaml:"min_score,omitempty"`
+}
+
+// UnmarshalYAML handles both scalar and mapping forms:
+//
+//	EMAIL_ADDRESS: mask
+//	EMAIL_ADDRESS:
+//	  action: block
+//	  min_score: 0.85
+func (p *PIIEntityPolicy) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		p.Action = Action(value.Value)
+		return nil
+	case yaml.MappingNode:
+		type plain PIIEntityPolicy
+		return value.Decode((*plain)(p))
+	default:
+		return fmt.Errorf("unsupported YAML node kind %v for PIIEntityPolicy", value.Kind)
+	}
+}
+
+type PIIPolicy map[string]PIIEntityPolicy
 
 type InjectionPolicy struct {
 	Action Action `yaml:"action"`
@@ -36,9 +63,12 @@ type RateLimitPolicy struct {
 	KeyBy             string `yaml:"key_by"` // "ip" or "api_key"
 }
 
-// ResponseScanPolicy enables PII scanning on non-streaming LLM responses.
+// ResponseScanPolicy enables PII scanning on LLM responses.
+// For streaming responses, the stream is buffered up to MaxBufferBytes before scanning.
+// If the stream exceeds the buffer the response passes through unscanned.
 type ResponseScanPolicy struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled        bool `yaml:"enabled"`
+	MaxBufferBytes int  `yaml:"max_buffer_bytes"` // 0 = 2 MiB default
 }
 
 // TokenLimitsPolicy caps output tokens and/or total prompt length.
@@ -62,7 +92,8 @@ type TokenBudgetPolicy struct {
 
 type Policy struct {
 	PII             PIIPolicy           `yaml:"pii"`
-	PIIMinScore     float64             `yaml:"pii_min_score"` // 0.0–1.0; 0 = accept all
+	PIIMinScore     float64             `yaml:"pii_min_score"`     // 0.0–1.0; 0 = accept all
+	OnUnknownEntity string              `yaml:"on_unknown_entity"` // allow (default) | block
 	Injection       InjectionPolicy     `yaml:"injection"`
 	OnDetectorError string              `yaml:"on_detector_error"` // fail_open | fail_closed
 	RateLimit       *RateLimitPolicy    `yaml:"rate_limit"`
@@ -76,7 +107,7 @@ type Policy struct {
 // so it only matters when an engine URL is set but the engine becomes unreachable.
 func DefaultPolicy() *Policy {
 	return &Policy{
-		PII:             PIIPolicy{},
+		PII:             make(PIIPolicy),
 		Injection:       InjectionPolicy{Action: ActionBlock},
 		OnDetectorError: "fail_closed",
 	}

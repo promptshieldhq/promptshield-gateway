@@ -1,15 +1,15 @@
 version: 2
 
-project_name: promptshield-proxy
+project_name: promptshield-gateway
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: promptshield-proxy
-    main: ./cmd/proxy
-    binary: promptshield-proxy
+  - id: promptshield-gateway
+    main: ./cmd/gateway
+    binary: promptshield-gateway
     goos:
       - linux
       - darwin
@@ -26,9 +26,9 @@ builds:
       - -X main.date={{ .Date }}
 
 archives:
-  - id: promptshield-proxy
+  - id: promptshield-gateway
     builds:
-      - promptshield-proxy
+      - promptshield-gateway
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format: tar.gz
     format_overrides:
@@ -51,6 +51,6 @@ changelog:
 release:
   github:
     owner: promptshieldhq
-    name: promptshield-proxy
+    name: promptshield-gateway
   draft: false
   prerelease: auto

@@ -13,7 +13,7 @@ Only the latest release receives security fixes.
 
 Do not report security vulnerabilities through public GitHub issues.
 
-Open a [GitHub Security Advisory](https://github.com/promptshieldhq/promptshield-proxy/security/advisories/new) instead. Reports stay private until a fix is released.
+Open a [GitHub Security Advisory](https://github.com/promptshieldhq/promptshield-gateway/security/advisories/new) instead. Reports stay private until a fix is released.
 
 Include:
 
@@ -29,7 +29,7 @@ Expect an initial response within **72 hours** and a fix or mitigation plan with
 
 Things we consider in scope:
 
-- API key leakage through proxy responses or logs
+- API key leakage through gateway responses or logs
 - Policy bypass (blocked content reaching the upstream LLM)
 - SSRF via configurable upstream URLs
 - Prompt injection bypassing the detection engine
