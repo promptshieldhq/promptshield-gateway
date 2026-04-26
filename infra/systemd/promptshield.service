@@ -1,6 +1,6 @@
 [Unit]
-Description=PromptShield LLM Security Proxy
-Documentation=https://github.com/promptshieldhq/promptshield-proxy
+Description=PromptShield LLM Security Gateway
+Documentation=https://github.com/promptshieldhq/promptshield-gateway
 After=network.target
 Wants=network.target
 
@@ -30,7 +30,7 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
-# Allow the proxy to write nothing except its own config dir
+# Allow the gateway to write nothing except its own config dir
 ReadWritePaths=/etc/promptshield
 
 # Logging — readable via: journalctl -u promptshield -f

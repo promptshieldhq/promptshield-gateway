@@ -85,9 +85,19 @@ type TokenBudgetWindow struct {
 
 // TokenBudgetPolicy caps cumulative token usage over daily, weekly, and/or monthly windows.
 type TokenBudgetPolicy struct {
+	Enabled *bool              `yaml:"enabled,omitempty"` // default true
 	Daily   *TokenBudgetWindow `yaml:"daily"`
 	Weekly  *TokenBudgetWindow `yaml:"weekly"`
 	Monthly *TokenBudgetWindow `yaml:"monthly"`
+}
+
+// IsEnabled reports whether token budgeting is enabled.
+// Missing "enabled" defaults to true for backward compatibility.
+func (p *TokenBudgetPolicy) IsEnabled() bool {
+	if p == nil || p.Enabled == nil {
+		return true
+	}
+	return *p.Enabled
 }
 
 type Policy struct {

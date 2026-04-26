@@ -9,6 +9,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	zlog "github.com/rs/zerolog/log"
+
+	"github.com/promptshieldhq/promptshield-gateway/internal/config"
 )
 
 // requestIDKeyType is private to avoid context key collisions.
@@ -61,12 +65,21 @@ type HTTPAnalyzer struct {
 }
 
 func NewHTTPAnalyzer(baseURL, apiKey string) *HTTPAnalyzer {
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(baseURL)), "https://") {
+		zlog.Warn().Str("url", baseURL).Msg("detector URL does not use HTTPS; raw user prompts are sent over plaintext")
+	}
 	return &HTTPAnalyzer{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
+			// Never follow redirects: the request body is the raw user prompt.
+			// A redirect would re-send it to an unvalidated endpoint.
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 			Transport: &http.Transport{
+				DialContext:         config.NewBlockingDialer(), // SSRF/DNS-rebinding prevention
 				MaxIdleConns:        20,
 				MaxIdleConnsPerHost: 5,
 				IdleConnTimeout:     30 * time.Second,

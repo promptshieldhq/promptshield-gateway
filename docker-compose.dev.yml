@@ -19,6 +19,28 @@ services:
       - "8080:8080"
     networks:
       - promptshield
+    depends_on:
+      promptshield-redis:
+        condition: service_healthy
+        required: false
+
+  # Optional Redis service ie only needed for HA multi-instance deployments.
+  promptshield-redis:
+    image: redis:7-alpine
+    container_name: promptshield-redis
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy noeviction
+    ports:
+      - "6379:6379"
+    networks:
+      - promptshield
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    profiles:
+      - ha  # only starts with: docker compose --profile ha up
 
 networks:
   promptshield:

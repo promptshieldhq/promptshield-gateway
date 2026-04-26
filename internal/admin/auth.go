@@ -1,14 +1,18 @@
 package admin
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
-	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 )
+
+// maxAdminAuthBuckets caps in-memory entries to prevent memory exhaustion.
+const maxAdminAuthBuckets = 10_000
 
 func (l *adminAuthLimiter) allow(key string, now time.Time) bool {
 	l.mu.Lock()
@@ -17,6 +21,9 @@ func (l *adminAuthLimiter) allow(key string, now time.Time) bool {
 
 	b, ok := l.buckets[key]
 	if !ok || now.After(b.reset) {
+		if len(l.buckets) >= maxAdminAuthBuckets {
+			l.evictOldestLocked()
+		}
 		l.buckets[key] = adminAuthWindow{count: 0, reset: now.Add(adminAuthFailureWindow)}
 		return true
 	}
@@ -31,6 +38,9 @@ func (l *adminAuthLimiter) fail(key string, now time.Time) {
 
 	b, ok := l.buckets[key]
 	if !ok || now.After(b.reset) {
+		if len(l.buckets) >= maxAdminAuthBuckets {
+			l.evictOldestLocked()
+		}
 		l.buckets[key] = adminAuthWindow{count: 1, reset: now.Add(adminAuthFailureWindow)}
 		return
 	}
@@ -55,7 +65,30 @@ func (l *adminAuthLimiter) cleanupLocked(now time.Time) {
 	}
 }
 
+// evictOldestLocked removes the entry expiring soonest. Caller must hold l.mu.
+func (l *adminAuthLimiter) evictOldestLocked() {
+	var oldest string
+	var oldestReset time.Time
+	first := true
+	for k, b := range l.buckets {
+		if first || b.reset.Before(oldestReset) {
+			oldest = k
+			oldestReset = b.reset
+			first = false
+		}
+	}
+	if oldest != "" {
+		delete(l.buckets, oldest)
+	}
+}
+
 func (a *API) requireAdminAuth(w http.ResponseWriter, r *http.Request) bool {
+	// IP check first to prevent timing-based token enumeration.
+	if !a.isAllowedAdminSource(r) {
+		writeError(w, http.StatusForbidden, "admin API is restricted to private/internal networks")
+		return false
+	}
+
 	clientKey := adminAuthClientKey(r)
 	now := time.Now()
 	if !a.authLimiter.allow(clientKey, now) {
@@ -80,14 +113,12 @@ func (a *API) requireAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 		token = strings.TrimSpace(auth[7:])
 	}
 
-	if subtle.ConstantTimeCompare([]byte(token), []byte(a.adminToken)) != 1 {
+	// Hash both sides so comparison is constant-time regardless of token length.
+	tokenHash := sha256.Sum256([]byte(token))
+	adminHash := sha256.Sum256([]byte(a.adminToken))
+	if subtle.ConstantTimeCompare(tokenHash[:], adminHash[:]) != 1 {
 		a.authLimiter.fail(clientKey, now)
 		writeError(w, http.StatusUnauthorized, "invalid authorization")
-		return false
-	}
-
-	if !a.isAllowedAdminSource(r) {
-		writeError(w, http.StatusForbidden, "admin API is restricted to private/internal networks")
 		return false
 	}
 
@@ -108,7 +139,7 @@ func (a *API) isAllowedAdminSource(r *http.Request) bool {
 	if ip == nil {
 		return false
 	}
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+	if ip.IsLoopback() || ip.IsPrivate() {
 		return true
 	}
 	for _, cidr := range a.allowedCIDRs {
@@ -119,7 +150,7 @@ func (a *API) isAllowedAdminSource(r *http.Request) bool {
 	return false
 }
 
-func parseAdminAllowedCIDRs(raw string) []*net.IPNet {
+func parseAdminAllowedCIDRs(log zerolog.Logger, raw string) []*net.IPNet {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
@@ -132,7 +163,7 @@ func parseAdminAllowedCIDRs(raw string) []*net.IPNet {
 		}
 		_, cidr, err := net.ParseCIDR(entry)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %s: skipping invalid CIDR %q: %v\n", adminAllowedCIDRsEnv, entry, err)
+			log.Warn().Str("env", adminAllowedCIDRsEnv).Str("cidr", entry).Err(err).Msg("skipping invalid CIDR in admin allowed list")
 			continue
 		}
 		cidrs = append(cidrs, cidr)

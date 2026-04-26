@@ -4,6 +4,7 @@ package budget
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -11,9 +12,27 @@ import (
 	"github.com/promptshieldhq/promptshield-gateway/internal/policy"
 )
 
-// State is in memory and resets on restart.
+// Tracker is the interface satisfied by both the in-memory and Redis backends.
+type Tracker interface {
+	Check(r *http.Request) (bool, string)
+	Record(r *http.Request, tokens int)
+	Stop()
+	Snapshot() TrackerSnapshot
+	MigrateFrom(TrackerSnapshot)
+}
 
-// Max number of tracked client entries.
+// NewTracker returns a Redis-backed Tracker when redisURL is set, else in-memory.
+func NewTracker(p *policy.TokenBudgetPolicy, redisURL string) (Tracker, error) {
+	if redisURL != "" {
+		if os.Getenv("PROMPTSHIELD_KEY_HMAC_SECRET") == "" {
+			return nil, fmt.Errorf("PROMPTSHIELD_KEY_HMAC_SECRET must be set when Redis is enabled")
+		}
+		return NewRedisTracker(p, redisURL)
+	}
+	return New(p), nil
+}
+
+// Max number of tracked client entries (in-memory only).
 const maxEntries = 100_000
 
 type entry struct {
@@ -21,9 +40,8 @@ type entry struct {
 	windowStart time.Time
 }
 
-// Tracker enforces token budgets per client.
-// Safe for concurrent use.
-type Tracker struct {
+// InMemoryTracker enforces per-client token budgets. Safe for concurrent use.
+type InMemoryTracker struct {
 	mu       sync.Mutex
 	entries  map[string]*entry
 	policy   *policy.TokenBudgetPolicy
@@ -32,8 +50,8 @@ type Tracker struct {
 }
 
 // New creates a tracker and starts background eviction.
-func New(p *policy.TokenBudgetPolicy) *Tracker {
-	t := &Tracker{
+func New(p *policy.TokenBudgetPolicy) *InMemoryTracker {
+	t := &InMemoryTracker{
 		entries: make(map[string]*entry),
 		policy:  p,
 		done:    make(chan struct{}),
@@ -43,12 +61,12 @@ func New(p *policy.TokenBudgetPolicy) *Tracker {
 }
 
 // Stop ends background eviction. Safe to call multiple times.
-func (t *Tracker) Stop() {
+func (t *InMemoryTracker) Stop() {
 	t.stopOnce.Do(func() { close(t.done) })
 }
 
 // Check reports whether the request is still within budget.
-func (t *Tracker) Check(r *http.Request) (bool, string) {
+func (t *InMemoryTracker) Check(r *http.Request) (bool, string) {
 	now := time.Now().UTC()
 	p := t.policy
 
@@ -81,7 +99,7 @@ func (t *Tracker) Check(r *http.Request) (bool, string) {
 }
 
 // Record adds tokens to all active budget windows.
-func (t *Tracker) Record(r *http.Request, tokens int) {
+func (t *InMemoryTracker) Record(r *http.Request, tokens int) {
 	if tokens <= 0 {
 		return
 	}
@@ -105,9 +123,8 @@ func (t *Tracker) Record(r *http.Request, tokens int) {
 	}
 }
 
-// getOrReset returns the entry for key and resets it when the window changes.
-// Caller must hold t.mu.
-func (t *Tracker) getOrReset(key string, windowStart time.Time) *entry {
+// getOrReset returns the entry for key, resetting it on window change. Caller holds t.mu.
+func (t *InMemoryTracker) getOrReset(key string, windowStart time.Time) *entry {
 	e, ok := t.entries[key]
 	if !ok || e.windowStart.Before(windowStart) {
 		if !ok && len(t.entries) >= maxEntries {
@@ -119,9 +136,8 @@ func (t *Tracker) getOrReset(key string, windowStart time.Time) *entry {
 	return e
 }
 
-// evictOldest removes the oldest window entry.
-// Caller must hold t.mu.
-func (t *Tracker) evictOldest() {
+// evictOldest removes the entry with the oldest window. Caller holds t.mu.
+func (t *InMemoryTracker) evictOldest() {
 	var oldestKey string
 	var oldestTime time.Time
 	first := true
@@ -147,7 +163,7 @@ type TrackerSnapshot struct {
 }
 
 // Snapshot copies current budget entries.
-func (t *Tracker) Snapshot() TrackerSnapshot {
+func (t *InMemoryTracker) Snapshot() TrackerSnapshot {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	snap := TrackerSnapshot{Entries: make(map[string]entry, len(t.entries))}
@@ -157,9 +173,8 @@ func (t *Tracker) Snapshot() TrackerSnapshot {
 	return snap
 }
 
-// MigrateFrom loads prior state so budgets survive policy reload.
-// Call before serving requests.
-func (t *Tracker) MigrateFrom(snap TrackerSnapshot) {
+// MigrateFrom loads prior state to preserve budgets across policy reloads.
+func (t *InMemoryTracker) MigrateFrom(snap TrackerSnapshot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for k, e := range snap.Entries {
@@ -167,7 +182,7 @@ func (t *Tracker) MigrateFrom(snap TrackerSnapshot) {
 	}
 }
 
-func (t *Tracker) evictLoop() {
+func (t *InMemoryTracker) evictLoop() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -181,7 +196,7 @@ func (t *Tracker) evictLoop() {
 }
 
 // evict removes entries older than 32 days.
-func (t *Tracker) evict() {
+func (t *InMemoryTracker) evict() {
 	cutoff := time.Now().UTC().AddDate(0, 0, -32)
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -12,6 +12,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_, _ = w.Write(data) //nolint:errcheck // write errors after headers are sent cannot be communicated to the client
 }

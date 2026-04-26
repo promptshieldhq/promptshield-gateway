@@ -127,7 +127,7 @@ func New(log zerolog.Logger, policyPath, envFilePath string, onPolicyLoad func(*
 		onPolicyLoad: onPolicyLoad,
 		adminToken:   token,
 		authLimiter:  newAdminAuthLimiter(),
-		allowedCIDRs: parseAdminAllowedCIDRs(os.Getenv(adminAllowedCIDRsEnv)),
+		allowedCIDRs: parseAdminAllowedCIDRs(adminLog, os.Getenv(adminAllowedCIDRsEnv)),
 	}
 }
 

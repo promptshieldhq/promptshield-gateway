@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -126,9 +127,7 @@ func ValidateURL(raw string) error {
 	return nil
 }
 
-// ValidateNotLinkLocalURL blocks upstreams that resolve to link-local ranges
-// (169.254.0.0/16, fe80::/10), commonly used by cloud metadata services.
-// Private RFC-1918 addresses are still allowed.
+// ValidateNotLinkLocalURL rejects upstreams resolving to link-local or IMDS ranges.
 func ValidateNotLinkLocalURL(raw string) error {
 	u, err := url.ParseRequestURI(raw)
 	if err != nil {
@@ -159,9 +158,13 @@ func validateHostNotLinkLocal(raw, host string) error {
 	return nil
 }
 
-// linkLocalNets contains blocked link-local CIDR ranges.
+// blockedUpstreamNets holds link-local and IMDS ranges blocked as upstream targets.
 var linkLocalNets = func() []net.IPNet {
-	ranges := []string{"169.254.0.0/16", "fe80::/10"}
+	ranges := []string{
+		"169.254.0.0/16",   // IPv4 link-local (AWS/GCP IMDS, APIPA)
+		"fe80::/10",        // IPv6 link-local
+		"168.63.129.16/32", // Azure IMDS — not link-local but must be blocked
+	}
 	nets := make([]net.IPNet, 0, len(ranges))
 	for _, cidr := range ranges {
 		_, n, err := net.ParseCIDR(cidr)
@@ -180,4 +183,48 @@ func isLinkLocalIP(ip net.IP) bool {
 		}
 	}
 	return false
+}
+
+// NewBlockingDialer returns a DialContext that validates each resolved IP against blocked ranges (SSRF/DNS-rebinding prevention).
+func NewBlockingDialer() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid address %q: %w", addr, err)
+		}
+
+		// Literal IP: validate and connect directly without re-resolution.
+		if ip := net.ParseIP(host); ip != nil {
+			if isLinkLocalIP(ip) {
+				return nil, fmt.Errorf("connection to %s blocked (SSRF prevention)", host)
+			}
+			return d.DialContext(ctx, network, addr)
+		}
+
+		// Hostname: resolve, validate all IPs, connect to the first safe address.
+		resolved, err := net.DefaultResolver.LookupHost(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("dns lookup %s: %w", host, err)
+		}
+
+		var safeTarget string
+		for _, a := range resolved {
+			ip := net.ParseIP(a)
+			if ip != nil && isLinkLocalIP(ip) {
+				return nil, fmt.Errorf("connection to %s (%s) blocked (SSRF prevention)", host, a)
+			}
+			if safeTarget == "" {
+				safeTarget = net.JoinHostPort(a, port)
+			}
+		}
+
+		if safeTarget == "" {
+			return nil, fmt.Errorf("no valid addresses resolved for %s", host)
+		}
+
+		// Dial the specific resolved IP to prevent a second DNS lookup that could
+		// return a different (attacker-controlled) address.
+		return d.DialContext(ctx, network, safeTarget)
+	}
 }

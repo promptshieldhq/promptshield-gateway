@@ -98,3 +98,17 @@ injection:
   action: block
 
 on_detector_error: fail_closed
+
+rate_limit:
+  requests_per_minute: 60
+  burst: 10
+  key_by: api_key   # api_key | ip | global
+
+token_budget:
+  enabled: false  # set false to disable token budget enforcement
+  daily:
+    tokens: 100000
+    key_by: api_key
+  monthly:
+    tokens: 2000000
+    key_by: api_key

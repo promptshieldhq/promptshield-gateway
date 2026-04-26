@@ -127,6 +127,12 @@ func validatePolicyContent(content string) (*policy.Policy, error) {
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
+	// Restrict before writing so the YAML is never world-readable.
+	if err := tmpFile.Chmod(0o600); err != nil {
+		tmpFile.Close()
+		return nil, err
+	}
+
 	if _, err := tmpFile.WriteString(content); err != nil {
 		tmpFile.Close()
 		return nil, err

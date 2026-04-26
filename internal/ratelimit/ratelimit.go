@@ -7,8 +7,30 @@ import (
 	"sync"
 	"time"
 
+	zlog "github.com/rs/zerolog/log"
+
 	"github.com/promptshieldhq/promptshield-gateway/internal/config"
 )
+
+// RateLimiter is the interface satisfied by both the in-memory and Redis backends.
+type RateLimiter interface {
+	Allow(r *http.Request) bool
+	Stop()
+	KeyBy() string
+	Snapshot() LimiterSnapshot
+	MigrateFrom(LimiterSnapshot)
+}
+
+// NewLimiter returns a Redis-backed RateLimiter when redisURL is set, else in-memory.
+func NewLimiter(rpm, burst int, keyBy, redisURL string) (RateLimiter, error) {
+	if redisURL != "" {
+		if os.Getenv("PROMPTSHIELD_KEY_HMAC_SECRET") == "" {
+			return nil, fmt.Errorf("PROMPTSHIELD_KEY_HMAC_SECRET must be set when Redis is enabled")
+		}
+		return NewRedisLimiter(rpm, burst, keyBy, redisURL)
+	}
+	return New(rpm, burst, keyBy), nil
+}
 
 // maxBuckets caps per-client entries to prevent memory exhaustion when an attacker cycles through many unique api_key tokens.
 const maxBuckets = 100_000
@@ -18,6 +40,7 @@ type bucket struct {
 	lastCheck time.Time
 }
 
+// Limiter is the in-memory token bucket implementation.
 type Limiter struct {
 	mu       sync.Mutex
 	buckets  map[string]*bucket
@@ -59,7 +82,7 @@ func (l *Limiter) Allow(r *http.Request) bool {
 	b, ok := l.buckets[key]
 	if !ok {
 		if len(l.buckets) >= maxBuckets {
-			fmt.Fprintf(os.Stderr, "ratelimit: bucket table full (%d entries) — evicting LRU; possible key-cycling attack\n", maxBuckets)
+			zlog.Warn().Int("max_buckets", maxBuckets).Msg("ratelimit: bucket table full — evicting LRU; possible key-cycling attack")
 			l.evictLRU()
 		}
 		b = &bucket{tokens: l.burst, lastCheck: now}
@@ -134,8 +157,7 @@ type LimiterSnapshot struct {
 	Buckets map[string]bucket
 }
 
-// Snapshot returns a copy of current bucket state. Used to migrate counters to a
-// new limiter when policy reloads so per-client allowances are not reset.
+// Snapshot returns a copy of bucket state for migration on policy reload.
 func (l *Limiter) Snapshot() LimiterSnapshot {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -149,9 +171,7 @@ func (l *Limiter) Snapshot() LimiterSnapshot {
 	return snap
 }
 
-// MigrateFrom pre-loads bucket state from a previous limiter's snapshot.
-// Only migrates when the key strategy is unchanged; clamps tokens to the new burst limit.
-// Must be called before the limiter handles any requests.
+// MigrateFrom pre-loads bucket state from a snapshot; no-op if key strategy changed.
 func (l *Limiter) MigrateFrom(snap LimiterSnapshot) {
 	if snap.KeyBy != l.keyBy {
 		return // key strategy changed; old keys no longer meaningful

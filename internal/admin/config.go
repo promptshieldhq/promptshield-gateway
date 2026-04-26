@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/promptshieldhq/promptshield-gateway/internal/config"
@@ -298,14 +299,45 @@ func applyCoreRuntimeUpdates(updates map[string]string, req configUpdateRequest)
 	if policyPath == "" {
 		policyPath = config.GetEnv("PROMPTSHIELD_POLICY_PATH", "config/policy.yaml")
 	}
+	if err := validatePolicyPath(policyPath); err != nil {
+		return fmt.Errorf("policyPath: %w", err)
+	}
 	updates["PROMPTSHIELD_POLICY_PATH"] = policyPath
 
 	return nil
 }
 
+func validatePolicyPath(p string) error {
+	cleaned := filepath.Clean(p)
+	if filepath.IsAbs(cleaned) {
+		return fmt.Errorf("absolute paths are not allowed")
+	}
+	ext := strings.ToLower(filepath.Ext(cleaned))
+	if ext != ".yaml" && ext != ".yml" {
+		return fmt.Errorf("must have .yaml or .yml extension")
+	}
+	for _, part := range strings.Split(cleaned, string(filepath.Separator)) {
+		if part == ".." {
+			return fmt.Errorf("path traversal not allowed")
+		}
+	}
+	return nil
+}
+
 func validateUpdateValues(updates map[string]string) error {
 	for key, value := range updates {
+		if value == "" {
+			continue
+		}
 		if strings.ContainsAny(value, "\n\r\x00") {
+			return fmt.Errorf("%s contains unsafe characters", key)
+		}
+		// URL values are validated by validatedURLOrEmpty; skip pattern check for them.
+		lower := strings.ToLower(value)
+		if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+			continue
+		}
+		if !safeEnvValuePattern.MatchString(value) {
 			return fmt.Errorf("%s contains unsafe characters", key)
 		}
 	}
