@@ -9,10 +9,12 @@
 # Build output
 bin/
 dist/
-gateway
 promptshield
 
 # Editor / OS
 .DS_Store
 *.swp
 *.swo
+
+test/*
+*_test.go
