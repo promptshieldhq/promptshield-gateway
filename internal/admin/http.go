@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+const responseKeySuccess = "success"
+
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -19,7 +21,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]any{
-		"success": false,
-		"error":   message,
+		responseKeySuccess: false,
+		"error":            message,
 	})
 }

@@ -28,24 +28,30 @@ const (
 
 	engineURLNone  = "none"
 	defaultEnvFile = ".env"
+
+	providerGemini           = "gemini"
+	providerOpenAI           = "openai"
+	providerAnthropic        = "anthropic"
+	providerSelfhosted       = "selfhosted"
+	providerOpenAICompatible = "openai-compatible"
 )
 
 var safeEnvValuePattern = regexp.MustCompile(`^[A-Za-z0-9_./:@,+-]+$`)
 
 var providerURLKeys = map[string]string{
-	"gemini":            "PROMPTSHIELD_GEMINI_UPSTREAM_URL",
-	"openai":            "PROMPTSHIELD_OPENAI_UPSTREAM_URL",
-	"anthropic":         "PROMPTSHIELD_ANTHROPIC_UPSTREAM_URL",
-	"selfhosted":        "PROMPTSHIELD_SELFHOSTED_UPSTREAM_URL",
-	"openai-compatible": "PROMPTSHIELD_OPENAI_COMPATIBLE_UPSTREAM_URL",
+	providerGemini:           "PROMPTSHIELD_GEMINI_UPSTREAM_URL",
+	providerOpenAI:           "PROMPTSHIELD_OPENAI_UPSTREAM_URL",
+	providerAnthropic:        "PROMPTSHIELD_ANTHROPIC_UPSTREAM_URL",
+	providerSelfhosted:       "PROMPTSHIELD_SELFHOSTED_UPSTREAM_URL",
+	providerOpenAICompatible: "PROMPTSHIELD_OPENAI_COMPATIBLE_UPSTREAM_URL",
 }
 
 var modelEnvKeys = map[string]string{
-	"global":     "PROMPTSHIELD_MODEL",
-	"gemini":     "PROMPTSHIELD_GEMINI_MODEL",
-	"openai":     "PROMPTSHIELD_OPENAI_MODEL",
-	"anthropic":  "PROMPTSHIELD_ANTHROPIC_MODEL",
-	"selfhosted": "PROMPTSHIELD_SELFHOSTED_MODEL",
+	"global":           "PROMPTSHIELD_MODEL",
+	providerGemini:     "PROMPTSHIELD_GEMINI_MODEL",
+	providerOpenAI:     "PROMPTSHIELD_OPENAI_MODEL",
+	providerAnthropic:  "PROMPTSHIELD_ANTHROPIC_MODEL",
+	providerSelfhosted: "PROMPTSHIELD_SELFHOSTED_MODEL",
 }
 
 type API struct {

@@ -81,7 +81,7 @@ func (a *API) handleUpdatePolicy(w http.ResponseWriter, r *http.Request) {
 		a.onPolicyLoad(parsedPolicy)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+	writeJSON(w, http.StatusOK, map[string]any{responseKeySuccess: true})
 }
 
 func readPolicyPayload(r *http.Request) (string, error) {

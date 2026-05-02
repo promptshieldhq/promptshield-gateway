@@ -18,3 +18,5 @@ promptshield
 
 test/*
 *_test.go
+c.out
+

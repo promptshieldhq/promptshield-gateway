@@ -75,8 +75,8 @@ func (a *AnthropicAdapter) Forward(ctx context.Context, requestID string, req *C
 		switch strings.ToLower(strings.TrimSpace(msg.Role)) {
 		case "system":
 			systemParts = append(systemParts, msg.Content)
-		case "assistant":
-			messages = append(messages, anthropicMessage{Role: "assistant", Content: msg.Content})
+		case roleAssistant:
+			messages = append(messages, anthropicMessage{Role: roleAssistant, Content: msg.Content})
 		default:
 			messages = append(messages, anthropicMessage{Role: "user", Content: msg.Content})
 		}
@@ -185,7 +185,7 @@ func (a *AnthropicAdapter) BuildStreamChunk(text string) []byte {
 	b, err := json.Marshal(map[string]any{
 		"type":  "content_block_delta",
 		"index": 0,
-		"delta": map[string]string{"type": "text_delta", "text": text},
+		"delta": map[string]string{"type": "text_delta", fieldText: text},
 	})
 	if err != nil {
 		return nil
@@ -206,15 +206,15 @@ func (a *AnthropicAdapter) ScanResponse(ctx context.Context, body []byte, maskFn
 	changed := false
 	for i, block := range content {
 		bm, ok := block.(map[string]any)
-		if !ok || bm["type"] != "text" {
+		if !ok || bm["type"] != fieldText {
 			continue
 		}
-		text, ok := bm["text"].(string)
+		text, ok := bm[fieldText].(string)
 		if !ok || text == "" {
 			continue
 		}
 		if masked, didMask := maskFn(ctx, text); didMask {
-			bm["text"] = masked
+			bm[fieldText] = masked
 			content[i] = bm
 			changed = true
 		}

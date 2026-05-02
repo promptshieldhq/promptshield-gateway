@@ -11,37 +11,42 @@ import (
 // Registry is a clean Prometheus registry — no default Go runtime metrics.
 var Registry = prometheus.NewRegistry()
 
+const (
+	labelModel    = "model"
+	labelProvider = "provider"
+)
+
 var (
 	requestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_requests_total",
 		Help: "Total requests processed, labeled by action, provider, and model.",
-	}, []string{"action", "provider", "model"})
+	}, []string{"action", labelProvider, labelModel})
 
 	requestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "promptshield_request_duration_seconds",
 		Help:    "End-to-end request latency in seconds (including upstream LLM).",
 		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60},
-	}, []string{"action", "provider", "model"})
+	}, []string{"action", labelProvider, labelModel})
 
 	tokensTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_tokens_total",
 		Help: "Total LLM tokens counted, labeled by type (prompt|completion|total), provider, and model.",
-	}, []string{"token_type", "provider", "model"})
+	}, []string{"token_type", labelProvider, labelModel})
 
 	entitiesDetectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_entities_detected_total",
 		Help: "Total PII entities detected, labeled by entity type and provider.",
-	}, []string{"entity_type", "provider"})
+	}, []string{"entity_type", labelProvider})
 
 	injectionsDetectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_injections_detected_total",
 		Help: "Total prompt injection attacks detected, labeled by provider, model, and injection reason.",
-	}, []string{"provider", "model", "reason"})
+	}, []string{labelProvider, labelModel, "reason"})
 
 	responseScansTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "promptshield_response_scans_total",
 		Help: "Total LLM responses scanned for PII/injection, labeled by provider and model.",
-	}, []string{"provider", "model"})
+	}, []string{labelProvider, labelModel})
 )
 
 func init() {

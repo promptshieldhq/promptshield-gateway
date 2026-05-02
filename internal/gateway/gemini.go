@@ -158,7 +158,7 @@ func (a *GeminiAdapter) BuildStreamChunk(text string) []byte {
 	b, err := json.Marshal(map[string]any{
 		"candidates": []map[string]any{
 			{"content": map[string]any{
-				"parts": []map[string]string{{"text": text}},
+				"parts": []map[string]string{{fieldText: text}},
 				"role":  "model",
 			}},
 		},
@@ -199,12 +199,12 @@ func (a *GeminiAdapter) ScanResponse(ctx context.Context, body []byte, maskFn fu
 			if !ok {
 				continue
 			}
-			text, ok := pm["text"].(string)
+			text, ok := pm[fieldText].(string)
 			if !ok || text == "" {
 				continue
 			}
 			if masked, didMask := maskFn(ctx, text); didMask {
-				pm["text"] = masked
+				pm[fieldText] = masked
 				parts[j] = pm
 				changed = true
 			}
@@ -234,7 +234,7 @@ func toGeminiContents(messages []ChatMessage) ([]geminiContent, *geminiSystemIns
 		switch role {
 		case "system":
 			systemParts = append(systemParts, geminiPart{Text: msg.Content})
-		case "assistant":
+		case roleAssistant:
 			contents = append(contents, geminiContent{
 				Role:  "model", // Gemini uses "model", not "assistant"
 				Parts: []geminiPart{{Text: msg.Content}},

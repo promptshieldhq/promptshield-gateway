@@ -39,7 +39,7 @@ func buildConfigResponseFromEnv() configResponse {
 	return configResponse{
 		Mode:         mode,
 		EngineURL:    engineURL,
-		Provider:     strings.ToLower(config.GetEnv("PROMPTSHIELD_PROVIDER", "gemini")),
+		Provider:     strings.ToLower(config.GetEnv("PROMPTSHIELD_PROVIDER", providerGemini)),
 		UpstreamURL:  strings.TrimSpace(e("PROMPTSHIELD_UPSTREAM_URL")),
 		ProviderMode: providerMode,
 		Providers:    providers,
@@ -71,16 +71,16 @@ func currentModels(getEnv func(string) string) map[string]string {
 
 func currentKeyCounts(getEnv func(string) string) map[string]int {
 	return map[string]int{
-		"upstream":  len(splitCSV(getEnv("PROMPTSHIELD_UPSTREAM_API_KEY"))),
-		"gemini":    len(splitCSV(getEnv("GEMINI_API_KEY"))),
-		"openai":    len(splitCSV(getEnv("OPENAI_API_KEY"))),
-		"anthropic": len(splitCSV(getEnv("ANTHROPIC_API_KEY"))),
+		"upstream":        len(splitCSV(getEnv("PROMPTSHIELD_UPSTREAM_API_KEY"))),
+		providerGemini:    len(splitCSV(getEnv("GEMINI_API_KEY"))),
+		providerOpenAI:    len(splitCSV(getEnv("OPENAI_API_KEY"))),
+		providerAnthropic: len(splitCSV(getEnv("ANTHROPIC_API_KEY"))),
 	}
 }
 
 func validProvider(provider string) error {
 	switch provider {
-	case "gemini", "openai", "anthropic", "openai-compatible", "selfhosted":
+	case providerGemini, providerOpenAI, providerAnthropic, providerOpenAICompatible, providerSelfhosted:
 		return nil
 	default:
 		return fmt.Errorf("unknown provider %q: must be gemini, openai, anthropic, openai-compatible, or selfhosted", provider)
@@ -121,8 +121,8 @@ func (a *API) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "Config updated. Restart the gateway for all changes to take effect.",
+		responseKeySuccess: true,
+		"message":          "Config updated. Restart the gateway for all changes to take effect.",
 	})
 }
 
@@ -182,7 +182,7 @@ func resolveConfigModes(req configUpdateRequest) (string, string, string, error)
 
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if provider == "" {
-		provider = "gemini"
+		provider = providerGemini
 	}
 	if err := validProvider(provider); err != nil {
 		return "", "", "", err
