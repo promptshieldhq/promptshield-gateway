@@ -34,7 +34,7 @@ groups:
           severity: warning
         annotations:
           summary: "p95 latency above 5s"
-          description: "p95 end-to-end latency is {{ $value }}s — check upstream LLM health"
+          description: "p95 end-to-end latency is {{ $value }}s : check upstream LLM health"
 
       - alert: ErrorRateHigh
         expr: |
@@ -45,7 +45,7 @@ groups:
           severity: critical
         annotations:
           summary: "PromptShield error rate above 5%"
-          description: "Error rate is {{ $value | humanizePercentage }} — check upstream LLM and API keys"
+          description: "Error rate is {{ $value | humanizePercentage }} : check upstream LLM and API keys"
 
       - alert: TokenSpikeByModel
         expr: |

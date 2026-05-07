@@ -59,7 +59,7 @@ func printUsage() {
 	fmt.Print(`promptshield-gateway - LLM security gateway
 
 Usage:
-  promptshield [serve] [flags]   Start the proxy server (default)
+  promptshield [serve] [flags]   Start the gateway server (default)
   promptshield validate [flags]  Validate config and print summary
   promptshield version           Print version and exit
 

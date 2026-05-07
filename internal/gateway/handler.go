@@ -61,7 +61,7 @@ type blockResponse struct {
 }
 
 const (
-	maxBodyBytes = 4 << 20 // 4 MiB — incoming request body
+	maxBodyBytes = 4 << 20 // 4 MiB; incoming request body
 	actionError  = "error"
 )
 
@@ -199,7 +199,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// fail_open: allow request but mark it in audit.
 		ev.Action = "allow_unscanned"
 		ev.Reasons = []string{fmt.Sprintf("detector unavailable: %v", err)}
-		h.log.Warn().Err(err).Msg("detector failed and fail_open is enabled — request allowed unscanned")
+		h.log.Warn().Err(err).Msg("detector failed and fail_open is enabled; request allowed unscanned")
 	}
 
 	if detectResult != nil {
@@ -235,7 +235,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if req.Model == "" && adapter.Model() == "" {
 		ev.Action = actionError
 		h.writeJSON(w, http.StatusInternalServerError, errorResponse{
-			Error: fmt.Sprintf("provider %q has no model configured — set %s or pass model in the request", adapter.Name(), "PROMPTSHIELD_"+strings.ToUpper(adapter.Name())+"_MODEL"),
+			Error: fmt.Sprintf("provider %q has no model configured; set %s or pass model in the request", adapter.Name(), "PROMPTSHIELD_"+strings.ToUpper(adapter.Name())+"_MODEL"),
 		})
 		return
 	}
@@ -353,7 +353,7 @@ func (h *Handler) sendResponse(r *http.Request, w http.ResponseWriter, ev *audit
 			h.log.Warn().
 				Str("request_id", ev.RequestID).
 				Int("max_buffer_bytes", maxBuf).
-				Msg("response_scan: streaming response exceeds buffer limit — blocking request")
+				Msg("response_scan: streaming response exceeds buffer limit; blocking request")
 			ev.Action = actionError
 			h.writeJSON(w, http.StatusBadGateway, errorResponse{Error: "upstream streaming response exceeds scan buffer"})
 			return
@@ -398,10 +398,10 @@ func (h *Handler) sendResponse(r *http.Request, w http.ResponseWriter, ev *audit
 }
 
 // ReloadPolicy swaps policy and migrates limiter/budget counters.
-// For Redis backends, Snapshot/MigrateFrom are no-ops — state already lives in Redis.
+// For Redis backends, Snapshot/MigrateFrom are no-ops; state already lives in Redis.
 func (h *Handler) ReloadPolicy(p *policy.Policy) {
 	if p == nil {
-		h.log.Warn().Msg("ReloadPolicy called with nil policy — ignoring, keeping previous policy")
+		h.log.Warn().Msg("ReloadPolicy called with nil policy; ignoring, keeping previous policy")
 		return
 	}
 	var limiter ratelimit.RateLimiter
@@ -409,7 +409,7 @@ func (h *Handler) ReloadPolicy(p *policy.Policy) {
 		var err error
 		limiter, err = ratelimit.NewLimiter(rl.RequestsPerMinute, rl.Burst, rl.KeyBy, h.redisURL)
 		if err != nil {
-			h.log.Warn().Err(err).Msg("policy reload: Redis rate limiter unavailable — falling back to in-memory")
+			h.log.Warn().Err(err).Msg("policy reload: Redis rate limiter unavailable; falling back to in-memory")
 			limiter = ratelimit.New(rl.RequestsPerMinute, rl.Burst, rl.KeyBy)
 		}
 	}
@@ -418,7 +418,7 @@ func (h *Handler) ReloadPolicy(p *policy.Policy) {
 		var err error
 		tracker, err = budget.NewTracker(p.TokenBudget, h.redisURL)
 		if err != nil {
-			h.log.Warn().Err(err).Msg("policy reload: Redis budget tracker unavailable — falling back to in-memory")
+			h.log.Warn().Err(err).Msg("policy reload: Redis budget tracker unavailable; falling back to in-memory")
 			tracker = budget.New(p.TokenBudget)
 		}
 	}
@@ -433,7 +433,7 @@ func (h *Handler) ReloadPolicy(p *policy.Policy) {
 	oldTracker := h.tokenBudget
 
 	// Move counters before swapping in new limiter/tracker.
-	// For Redis backends this is a no-op — counters already survive in Redis.
+	// For Redis backends this is a no-op; counters already survive in Redis.
 	if limiter != nil && oldLimiter != nil {
 		limiter.MigrateFrom(oldLimiter.Snapshot())
 	}

@@ -64,7 +64,7 @@ func serve(log zerolog.Logger, envFile string) error {
 		limiter, limErr = ratelimit.NewLimiter(rl.RequestsPerMinute, rl.Burst, rl.KeyBy, redisURL)
 		switch {
 		case limErr != nil:
-			log.Warn().Err(limErr).Msg("Redis rate limiter unavailable — falling back to in-memory (not HA-safe)")
+			log.Warn().Err(limErr).Msg("Redis rate limiter unavailable; falling back to in-memory (not HA-safe)")
 			limiter = ratelimit.New(rl.RequestsPerMinute, rl.Burst, rl.KeyBy)
 		case redisURL != "":
 			log.Info().Int("rpm", rl.RequestsPerMinute).Int("burst", rl.Burst).Str("key_by", rl.KeyBy).Str("redis_host", redactedRedisHost(redisURL)).Msg("rate limiting enabled (Redis backend, HA-safe)")
@@ -72,7 +72,7 @@ func serve(log zerolog.Logger, envFile string) error {
 			log.Info().Int("rpm", rl.RequestsPerMinute).Int("burst", rl.Burst).Str("key_by", rl.KeyBy).Msg("rate limiting enabled (in-memory; set PROMPTSHIELD_REDIS_URL for HA)")
 		}
 		if rl.KeyBy != keyByAPIKey {
-			log.Warn().Msg("IP rate limiting uses RemoteAddr unless request comes from loopback or PROMPTSHIELD_TRUST_PROXY_CIDRS")
+			log.Warn().Msg("IP rate limiting uses RemoteAddr unless request comes from loopback or PROMPTSHIELD_TRUST_GATEWAY_CIDRS")
 		}
 	}
 
@@ -201,7 +201,7 @@ func initServeAdapter(log zerolog.Logger) (gateway.Adapter, error) {
 		return nil, err
 	}
 	if adapter.RequiresKey() && adapter.ResolveAPIKey(emptyRequest()) == "" {
-		log.Warn().Str("provider", provider).Msg("no API key configured — requests will fail with 401 at runtime")
+		log.Warn().Str("provider", provider).Msg("no API key configured")
 	}
 	return adapter, nil
 }
@@ -237,7 +237,7 @@ func configureResponseScan(log zerolog.Logger, p *policy.Policy) (bool, int) {
 	} else {
 		log.Info().Msg("response scanning enabled (streaming buffered, default 2 MiB)")
 	}
-	log.Warn().Msg("response_scan: streaming responses are buffered and collapsed into one chunk when PII is masked — progressive rendering is disabled for masked responses")
+	log.Warn().Msg("response_scan: streaming responses are buffered and collapsed into one chunk when PII is masked; progressive rendering is disabled for masked responses")
 	return scanResponse, responseScanMaxBuffer
 }
 
@@ -248,7 +248,7 @@ func registerRoutes(log zerolog.Logger, mux *http.ServeMux, chatRoute string, ha
 
 	adminAPI := admin.New(log, policyPath, envFile, handler.ReloadPolicy)
 	if adminAddr != "" {
-		// Admin routes will be served on the dedicated internal listener — do not
+		// Admin routes will be served on the dedicated internal listener; do not
 		// register them on the public mux so they are unreachable from the internet.
 		log.Info().Str("admin_addr", adminAddr).Msg("admin API bound to internal listener (not exposed on public port)")
 	} else {
@@ -376,7 +376,7 @@ func waitForEngine(ctx context.Context, log zerolog.Logger, engineURL string, ti
 
 	for {
 		if time.Now().After(deadline) {
-			log.Warn().Str("url", readyURL).Msg("engine did not become ready within timeout — proceeding anyway; first requests may fail")
+			log.Warn().Str("url", readyURL).Msg("engine did not become ready within timeout; proceeding anyway; first requests may fail")
 			return
 		}
 

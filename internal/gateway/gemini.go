@@ -61,7 +61,7 @@ func (a *GeminiAdapter) ResolveAPIKey(r *http.Request) string {
 	if key := strings.TrimSpace(r.Header.Get("x-gemini-api-key")); key != "" {
 		return key
 	}
-	// Prefer the configured key pool over the incoming Bearer token so the proxy
+	// Prefer the configured key pool over the incoming Bearer token so the gateway
 	// acts as a key vault (e.g. OpenClaw sends a placeholder Bearer value).
 	// Bearer passthrough is only used when no pool key is configured.
 	if key := a.keyPool.Pick(); key != "" {

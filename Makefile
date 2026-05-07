@@ -124,7 +124,7 @@ install-service: # Re-install only the systemd service file (run as root)
 	@[ "$(shell id -u)" = "0" ] || { echo "error: run as root (sudo make install-service)"; exit 1; }
 	@install -m 644 infra/systemd/promptshield.service $(SYSTEMD)/promptshield.service
 	@systemctl daemon-reload
-	@echo "✓ service file updated — restart to apply: sudo systemctl restart promptshield"
+	@echo "✓ service file updated; restart to apply: sudo systemctl restart promptshield"
 
 uninstall: # Remove binary and systemd service (config preserved) (run as root)
 	@[ "$(shell id -u)" = "0" ] || { echo "error: run as root (sudo make uninstall)"; exit 1; }
@@ -133,7 +133,7 @@ uninstall: # Remove binary and systemd service (config preserved) (run as root)
 	@systemctl daemon-reload
 	-@rm -f $(BIN_PATH)
 	@echo ""
-	@echo "✓ binary and service removed — config preserved at $(CONFIG_DIR)"
+	@echo "✓ binary and service removed, config preserved at $(CONFIG_DIR)"
 	@echo "  Remove manually if no longer needed: sudo rm -rf $(CONFIG_DIR)"
 
 help: # Show this help

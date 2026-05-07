@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -20,7 +21,7 @@ func initSecretsBackend(log zerolog.Logger) detector.Analyzer {
 	backend := strings.ToLower(strings.TrimSpace(config.GetEnv("PROMPTSHIELD_SECRETS_BACKEND", "gitleaks")))
 
 	if backend == "gitleaks" && envTruthy("PROMPTSHIELD_GITLEAKS_DISABLED") {
-		log.Warn().Msg("PROMPTSHIELD_GITLEAKS_DISABLED is deprecated — use PROMPTSHIELD_SECRETS_BACKEND=none")
+		log.Warn().Msg("PROMPTSHIELD_GITLEAKS_DISABLED is deprecated; use PROMPTSHIELD_SECRETS_BACKEND=none")
 		backend = "none"
 	}
 
@@ -28,7 +29,7 @@ func initSecretsBackend(log zerolog.Logger) detector.Analyzer {
 	case "gitleaks":
 		gl, err := detector.NewGitleaksAnalyzer()
 		if err != nil {
-			log.Warn().Err(err).Msg("gitleaks init failed — secret scanning disabled")
+			log.Warn().Err(err).Msg("gitleaks init failed; secret scanning disabled")
 			return nil
 		}
 		return gl
@@ -38,10 +39,10 @@ func initSecretsBackend(log zerolog.Logger) detector.Analyzer {
 		return nil
 
 	default:
-		log.Warn().Str("value", backend).Msg("unknown PROMPTSHIELD_SECRETS_BACKEND — defaulting to gitleaks")
+		log.Warn().Str("value", backend).Msg("unknown PROMPTSHIELD_SECRETS_BACKEND; defaulting to gitleaks")
 		gl, err := detector.NewGitleaksAnalyzer()
 		if err != nil {
-			log.Warn().Err(err).Msg("gitleaks init failed — secret scanning disabled")
+			log.Warn().Err(err).Msg("gitleaks init failed; secret scanning disabled")
 			return nil
 		}
 		return gl
@@ -54,14 +55,22 @@ func initAnalyzer(log zerolog.Logger) (detector.Analyzer, error) {
 	detectorURL := config.GetEnv("PROMPTSHIELD_ENGINE_URL", engineURLNone)
 	switch detectorURL {
 	case engineURLNone, "":
-		log.Info().Msg("engine disabled — running in gateway mode (no PII/injection detection)")
+		log.Info().Msg("engine is disabled; gateway mode active, skipping PII and injection checks")
 		if secrets != nil {
 			return detector.NewCompositeAnalyzer(secrets, nil, log), nil
 		}
 		return detector.NewPassthroughAnalyzer(), nil
 	default:
-		if err := validateConfiguredURL("engine URL", detectorURL); err != nil {
-			return nil, fmt.Errorf("invalid engine URL %q: must be a valid http/https URL or 'none'", detectorURL)
+		if err := config.ValidateURL(detectorURL); err != nil {
+			return nil, fmt.Errorf("invalid engine URL %q: %w (must be a valid http/https URL or 'none')", detectorURL, err)
+		}
+		if err := config.ValidateNotLinkLocalURL(detectorURL); err != nil {
+			// Tolerate DNS failure; runtime dialer re-checks link-local ranges per connection.
+			if errors.Is(err, config.ErrUnresolvedHost) {
+				log.Warn().Err(err).Str("engine_url", detectorURL).Msg("engine hostname not yet resolvable; gateway starting anyway; engine calls will fail until it comes up")
+			} else {
+				return nil, fmt.Errorf("invalid engine URL %q: %w", detectorURL, err)
+			}
 		}
 		warnIfPlaintextRemote(log, "engine_url", detectorURL)
 		engineAPIKey := strings.TrimSpace(os.Getenv("PROMPTSHIELD_ENGINE_API_KEY"))
@@ -90,7 +99,7 @@ func initBudget(log zerolog.Logger, tb *policy.TokenBudgetPolicy) budget.Tracker
 	tracker, err := budget.NewTracker(tb, redisURL)
 	switch {
 	case err != nil:
-		log.Warn().Err(err).Msg("Redis budget tracker unavailable — falling back to in-memory (not HA-safe)")
+		log.Warn().Err(err).Msg("Redis budget tracker unavailable; falling back to in-memory (not HA-safe)")
 		tracker = budget.New(tb)
 	case redisURL != "":
 		log.Info().Str("redis_host", redactedRedisHost(redisURL)).Msg("token budget: Redis backend (HA-safe, survives restart)")
@@ -118,7 +127,7 @@ func initBudget(log zerolog.Logger, tb *policy.TokenBudgetPolicy) budget.Tracker
 		}
 	}
 	if budgetUsesIP {
-		log.Warn().Msg("IP-based token budget uses RemoteAddr unless request comes from loopback or PROMPTSHIELD_TRUST_PROXY_CIDRS")
+		log.Warn().Msg("IP-based token budget uses RemoteAddr unless request comes from loopback or PROMPTSHIELD_TRUST_GATEWAY_CIDRS")
 	}
 	return tracker
 }
@@ -136,7 +145,7 @@ func warnIfPlaintextRemote(log zerolog.Logger, label, rawURL string) {
 	} else if strings.EqualFold(host, "localhost") {
 		return
 	}
-	log.Warn().Str(label, rawURL).Msg("upstream URL uses plaintext HTTP to a non-loopback host — use HTTPS")
+	log.Warn().Str(label, rawURL).Msg("upstream URL uses plaintext HTTP to a non-loopback host; use HTTPS")
 }
 
 func validProvider(provider string) error {
@@ -188,7 +197,7 @@ func buildMultiAdapter(log zerolog.Logger, providersEnv string) (gateway.Adapter
 		}
 		if a.RequiresKey() {
 			if key := a.ResolveAPIKey(emptyRequest()); key == "" {
-				log.Warn().Str("provider", name).Msg("no API key configured — requests to this provider will fail at runtime")
+				log.Warn().Str("provider", name).Msg("no API key configured")
 			}
 		}
 		log.Info().Str("provider", name).Str("url", providerURL).Str("model", a.Model()).Msg("provider configured")
@@ -205,7 +214,7 @@ func buildMultiAdapter(log zerolog.Logger, providersEnv string) (gateway.Adapter
 	modelRoutes := parseModelRoutes(log, config.GetEnv("PROMPTSHIELD_MODEL_ROUTES", ""))
 	for model, provider := range modelRoutes {
 		if _, ok := adapters[provider]; !ok {
-			log.Warn().Str("model", model).Str("provider", provider).Msg("PROMPTSHIELD_MODEL_ROUTES: provider not configured — route will use fallback")
+			log.Warn().Str("model", model).Str("provider", provider).Msg("PROMPTSHIELD_MODEL_ROUTES: provider not configured; route will use fallback")
 		}
 	}
 	return gateway.NewMultiAdapter(adapters, modelRoutes, fallback), nil

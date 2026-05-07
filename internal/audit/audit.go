@@ -59,11 +59,11 @@ func NewLogger(log zerolog.Logger) *Logger {
 	l := &Logger{log: log.With().Str("component", "audit").Logger()}
 	if raw := strings.TrimSpace(os.Getenv("PROMPTSHIELD_AUDIT_URL")); raw != "" {
 		if !strings.HasPrefix(strings.ToLower(raw), "https://") {
-			l.log.Warn().Msg("PROMPTSHIELD_AUDIT_URL must use HTTPS — HTTP push disabled")
+			l.log.Warn().Msg("PROMPTSHIELD_AUDIT_URL must use HTTPS; HTTP push disabled")
 		} else if err := config.ValidateURL(raw); err != nil {
-			l.log.Warn().Err(err).Msg("PROMPTSHIELD_AUDIT_URL invalid — HTTP push disabled")
+			l.log.Warn().Err(err).Msg("PROMPTSHIELD_AUDIT_URL invalid; HTTP push disabled")
 		} else if err := config.ValidateNotLinkLocalURL(raw); err != nil {
-			l.log.Warn().Err(err).Msg("PROMPTSHIELD_AUDIT_URL invalid — HTTP push disabled")
+			l.log.Warn().Err(err).Msg("PROMPTSHIELD_AUDIT_URL invalid; HTTP push disabled")
 		} else {
 			l.ingestURL = strings.TrimRight(raw, "/") + "/internal/audit/ingest"
 			l.ingestKey = os.Getenv("AUDIT_INGEST_SECRET")
@@ -116,7 +116,7 @@ func (l *Logger) Emit(ctx context.Context, e Event) {
 			l.log.Warn().
 				Str("request_id", e.RequestID).
 				Int("max_slots", maxConcurrentPushes).
-				Msg("audit push semaphore full — dropping event")
+				Msg("audit push semaphore full; dropping event")
 		}
 	}
 }
@@ -156,7 +156,7 @@ func NewRequestID() string {
 	if _, err := rand.Read(b); err != nil {
 		counter := atomic.AddUint64(&fallbackRequestIDCounter, 1)
 		ts := time.Now().UTC().UnixNano()
-		zlog.Warn().Err(err).Msg("crypto/rand unavailable — using fallback request ID")
+		zlog.Warn().Err(err).Msg("crypto/rand unavailable; using fallback request ID")
 		return fmt.Sprintf("%x%x", ts, counter)
 	}
 	return hex.EncodeToString(b)

@@ -82,7 +82,7 @@ func (l *Limiter) Allow(r *http.Request) bool {
 	b, ok := l.buckets[key]
 	if !ok {
 		if len(l.buckets) >= maxBuckets {
-			zlog.Warn().Int("max_buckets", maxBuckets).Msg("ratelimit: bucket table full — evicting LRU; possible key-cycling attack")
+			zlog.Warn().Int("max_buckets", maxBuckets).Msg("ratelimit: bucket table full evicting LRU; possible key-cycling attack")
 			l.evictLRU()
 		}
 		b = &bucket{tokens: l.burst, lastCheck: now}

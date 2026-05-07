@@ -29,7 +29,7 @@ const (
 	fieldText     = "text"
 )
 
-const maxResponseBytes = 10 << 20 // 10 MiB — upstream LLM response
+const maxResponseBytes = 10 << 20 // 10 MiB; upstream LLM response
 
 const upstreamAllowedHostsEnv = "PROMPTSHIELD_UPSTREAM_ALLOWED_HOSTS"
 

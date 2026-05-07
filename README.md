@@ -16,7 +16,7 @@ Every request flows through the gateway. Policy decisions happen before the LLM 
 
 | Action | What happens |
 |--------|-------------|
-| `block` | Request stopped, HTTP 403 returned — LLM never called |
+| `block` | Request stopped, HTTP 403 returned, LLM never called |
 | `mask` | PII replaced with `[ENTITY_TYPE]` before forwarding |
 | `allow` | Prompt forwarded unchanged |
 

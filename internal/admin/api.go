@@ -113,10 +113,6 @@ type configResponse struct {
 
 func New(log zerolog.Logger, policyPath, envFilePath string, onPolicyLoad func(*policy.Policy)) *API {
 	token := strings.TrimSpace(os.Getenv("PROMPTSHIELD_ADMIN_TOKEN"))
-	if token == "" {
-		// Backward compatibility for older deployments.
-		token = strings.TrimSpace(os.Getenv("PROXY_ADMIN_TOKEN"))
-	}
 	if envFilePath == "" {
 		envFilePath = defaultEnvFile
 	}

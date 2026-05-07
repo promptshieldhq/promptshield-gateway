@@ -33,7 +33,7 @@ PrivateDevices=true
 # Allow the gateway to write nothing except its own config dir
 ReadWritePaths=/etc/promptshield
 
-# Logging — readable via: journalctl -u promptshield -f
+# Logging; readable via: journalctl -u promptshield -f
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=promptshield

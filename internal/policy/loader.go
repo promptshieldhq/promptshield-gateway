@@ -98,7 +98,7 @@ func validateInjectionAction(p *Policy) error {
 	case "", ActionAllow, ActionBlock:
 		// valid
 	case ActionMask:
-		return fmt.Errorf("injection.action %q is not supported — injections have no span to redact; use block or allow", ActionMask)
+		return fmt.Errorf("injection.action %q is not supported; injections have no span to redact; use block or allow", ActionMask)
 	default:
 		return fmt.Errorf("invalid injection action %q: must be allow or block", p.Injection.Action)
 	}

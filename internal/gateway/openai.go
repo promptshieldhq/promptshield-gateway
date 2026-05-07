@@ -22,7 +22,7 @@ type openAICompatibleRequest struct {
 	StreamOptions *openAIStreamOptions `json:"stream_options,omitempty"`
 }
 
-// OpenAIAdapter covers openai, openai-compatible, and selfhosted — all use /v1/chat/completions.
+// OpenAIAdapter covers openai, openai-compatible, and selfhosted, all use /v1/chat/completions.
 type OpenAIAdapter struct {
 	name       string // ProviderOpenAI | ProviderOpenAICompatible | ProviderSelfHosted
 	baseURL    string
@@ -63,7 +63,7 @@ func (a *OpenAIAdapter) ResolveAPIKey(r *http.Request) string {
 			return key
 		}
 	}
-	// Prefer configured key pool so the proxy acts as a key vault.
+	// Prefer configured key pool so the gateway acts as a key vault.
 	if key := a.keyPool.Pick(); key != "" {
 		return key
 	}

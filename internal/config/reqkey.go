@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	envHMACSecret      = "PROMPTSHIELD_KEY_HMAC_SECRET"
-	envTrustProxyCIDRs = "PROMPTSHIELD_TRUST_PROXY_CIDRS"
-	requestKeyPrefix   = "k:"
+	envHMACSecret        = "PROMPTSHIELD_KEY_HMAC_SECRET"
+	envTrustGatewayCIDRs = "PROMPTSHIELD_TRUST_GATEWAY_CIDRS"
+	requestKeyPrefix     = "k:"
 
 	keyByAPIKey = "api_key"
 	keyByGlobal = "global"
@@ -42,10 +42,10 @@ func getHMACKey() []byte {
 			hmacKey = []byte(k)
 			return
 		}
-		zlog.Warn().Msg("PROMPTSHIELD_KEY_HMAC_SECRET not set — using ephemeral key; set it for stable Redis keys across restarts")
+		zlog.Warn().Msg("PROMPTSHIELD_KEY_HMAC_SECRET not set; using ephemeral key; set it for stable Redis keys across restarts")
 		b := make([]byte, 32)
 		if _, err := rand.Read(b); err != nil {
-			panic("promptshield: crypto/rand unavailable — cannot generate HMAC key: " + err.Error())
+			panic("promptshield: crypto/rand unavailable; cannot generate HMAC key: " + err.Error())
 		}
 		hmacKey = b
 	})
@@ -136,7 +136,7 @@ func isTrustedForwardPeer(remoteAddr string) bool {
 		return true
 	}
 
-	raw := strings.TrimSpace(os.Getenv(envTrustProxyCIDRs))
+	raw := strings.TrimSpace(os.Getenv(envTrustGatewayCIDRs))
 	cidrs := trustedForwardCIDRs(raw)
 
 	for _, cidr := range cidrs {
@@ -169,7 +169,7 @@ func parseTrustedForwardCIDRs(raw string) []*net.IPNet {
 		}
 		_, cidr, parseErr := net.ParseCIDR(entry)
 		if parseErr != nil {
-			zlog.Warn().Str("env", envTrustProxyCIDRs).Str("cidr", entry).Err(parseErr).Msg("skipping invalid CIDR in trusted proxy list")
+			zlog.Warn().Str("env", envTrustGatewayCIDRs).Str("cidr", entry).Err(parseErr).Msg("skipping invalid CIDR in trusted gateway list")
 			continue
 		}
 		cidrs = append(cidrs, cidr)

@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -11,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 )
+
+// ErrUnresolvedHost signals DNS failure during link-local check; safe to treat as soft since the runtime dialer re-checks per connection.
+var ErrUnresolvedHost = errors.New("hostname could not be resolved for link-local safety check")
 
 func GetEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -141,18 +145,18 @@ func ValidateNotLinkLocalURL(raw string) error {
 func validateHostNotLinkLocal(raw, host string) error {
 	if ip := net.ParseIP(host); ip != nil {
 		if isLinkLocalIP(ip) {
-			return fmt.Errorf("url %q targets a link-local address — possible cloud metadata service (IMDS) exposure", raw)
+			return fmt.Errorf("url %q targets a link-local address; possible cloud metadata service (IMDS) exposure", raw)
 		}
 		return nil
 	}
 
 	addrs, err := net.LookupHost(host)
 	if err != nil {
-		return fmt.Errorf("url hostname %q could not be resolved for link-local safety check: %w", host, err)
+		return fmt.Errorf("%w: %q: %v", ErrUnresolvedHost, host, err)
 	}
 	for _, addr := range addrs {
 		if ip := net.ParseIP(addr); ip != nil && isLinkLocalIP(ip) {
-			return fmt.Errorf("url hostname %q resolves to link-local address %s — possible cloud metadata service (IMDS) exposure", host, addr)
+			return fmt.Errorf("url hostname %q resolves to link-local address %s; possible cloud metadata service (IMDS) exposure", host, addr)
 		}
 	}
 	return nil
@@ -163,7 +167,7 @@ var linkLocalNets = func() []net.IPNet {
 	ranges := []string{
 		"169.254.0.0/16",   // IPv4 link-local (AWS/GCP IMDS, APIPA)
 		"fe80::/10",        // IPv6 link-local
-		"168.63.129.16/32", // Azure IMDS — not link-local but must be blocked
+		"168.63.129.16/32", // Azure IMDS; not link-local but must be blocked
 	}
 	nets := make([]net.IPNet, 0, len(ranges))
 	for _, cidr := range ranges {

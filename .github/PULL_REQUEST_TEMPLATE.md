@@ -13,7 +13,7 @@ fixes #
 
 ## How it was tested
 
-<!-- curl commands, unit tests, manual steps — whatever you ran. -->
+<!-- curl commands, unit tests, manual steps; whatever you ran. -->
 
 ## Checklist
 

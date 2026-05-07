@@ -21,7 +21,7 @@ Include:
 - File paths and line numbers relevant to the issue
 - Steps to reproduce
 - Proof-of-concept or exploit code (if possible)
-- Impact — what an attacker could achieve
+- Impact: what an attacker could achieve
 
 Expect an initial response within **72 hours** and a fix or mitigation plan within **14 days** for confirmed issues.
 

@@ -4,7 +4,7 @@
 # Per-entity entries accept either a plain action string or an object with an
 # optional min_score that overrides the global pii_min_score for that entity:
 #
-#   US_SSN: block                        # shorthand — inherits pii_min_score
+#   US_SSN: block                        # shorthand inherits pii_min_score
 #   US_SSN:
 #     action: block
 #     min_score: 0.90                    # only block when confidence >= 0.90
@@ -40,17 +40,17 @@ pii:
 
   # Secrets detected by Gitleaks (entity types match gitleaks rule IDs exactly)
   # AWS
-  # WARNING: AWS_ACCESS_TOKEN (AKIA… key IDs) are not secret on their own — the
+  # WARNING: AWS_ACCESS_TOKEN (AKIA… key IDs) are not secret on their own, the
   # secret access key is what grants access. Change to `block` if you operate in
   # an environment where key IDs themselves should not be forwarded.
   AWS_ACCESS_TOKEN: allow
-  AWS_SECRET_ACCESS_KEY: block      # 40-char secret — block always
+  AWS_SECRET_ACCESS_KEY: block      # 40-char secret, block always
 
   # Anthropic / OpenAI
   ANTHROPIC_API_KEY: block
   ANTHROPIC_ADMIN_API_KEY: block
   # WARNING: set to `block` if you do not want OpenAI API keys forwarded to
-  # upstream models — e.g. when users paste keys into prompts for other purposes.
+  # upstream models e.g. when users paste keys into prompts for other purposes.
   OPENAI_API_KEY: allow
 
   # Source control
@@ -62,7 +62,7 @@ pii:
   STRIPE_ACCESS_TOKEN: block
   STRIPE_API_KEY: block
 
-  # Private keys — ALL private key types (RSA, PKCS8, OPENSSH, PGP) map to PRIVATE_KEY
+  # Private keys, ALL private key types (RSA, PKCS8, OPENSSH, PGP) map to PRIVATE_KEY
   PRIVATE_KEY: block
 
   # GCP
@@ -81,11 +81,11 @@ pii:
   NPM_ACCESS_TOKEN: block
   PYPI_UPLOAD_TOKEN: block
 
-  # Generic — catches passwords, client_secret, auth_token, api_key= patterns
+  # Generic, catches passwords, client_secret, auth_token, api_key= patterns
   JWT: block
   GENERIC_API_KEY: block
 
-  # Engine-specific types (detection engine only — no Gitleaks equivalent)
+  # Engine-specific types (detection engine only, no Gitleaks equivalent)
   BEARER_TOKEN: block           # Authorization: Bearer <token> pasted in prompt
   DISCORD_BOT_TOKEN: block
   TELEGRAM_BOT_TOKEN: block

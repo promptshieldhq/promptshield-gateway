@@ -31,14 +31,14 @@ func NewCompositeAnalyzer(secrets, upstream Analyzer, log zerolog.Logger) *Compo
 	return &CompositeAnalyzer{secrets: secrets, upstream: upstream, log: log}
 }
 
-// Detect runs both analyzers in parallel and merges their results.
-// Secrets backend failures are logged and skipped; upstream errors are returned.
+// Detect runs both analyzers in parallel; secrets failures are skipped, upstream errors propagate.
+// Channels are buffered so goroutines exit cleanly even if ctx cancels early.
 func (c *CompositeAnalyzer) Detect(ctx context.Context, text string) (*DetectResponse, error) {
 	secretsCh := c.startSecretsDetection(ctx, text)
 	upCh := c.startUpstreamDetection(ctx, text)
 
-	secretEntities := collectSecretEntities(secretsCh)
-	base, err := collectUpstreamResponse(upCh)
+	secretEntities := collectSecretEntities(ctx, secretsCh)
+	base, err := collectUpstreamResponse(ctx, upCh)
 	if err != nil {
 		return nil, err
 	}
@@ -59,14 +59,14 @@ func (c *CompositeAnalyzer) startSecretsDetection(ctx context.Context, text stri
 				c.log.Error().
 					Str("panic", fmt.Sprintf("%v", p)).
 					Str("stack", string(debug.Stack())).
-					Msg("secrets backend panicked — request continues unscanned for secrets")
+					Msg("secrets backend panicked; request continues unscanned for secrets")
 				out <- nil
 			}
 		}()
 
 		resp, err := c.secrets.Detect(ctx, text)
 		if err != nil {
-			c.log.Warn().Err(err).Msg("secrets backend error — continuing without secrets scan")
+			c.log.Warn().Err(err).Msg("secrets backend error; continuing without secrets scan")
 			out <- nil
 			return
 		}
@@ -87,32 +87,50 @@ func (c *CompositeAnalyzer) startUpstreamDetection(ctx context.Context, text str
 
 	out := make(chan upResult, 1)
 	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				c.log.Error().
+					Str("panic", fmt.Sprintf("%v", p)).
+					Str("stack", string(debug.Stack())).
+					Msg("upstream detector panicked; failing request per OnDetectorError policy")
+				out <- upResult{err: fmt.Errorf("upstream detector panic: %v", p)}
+			}
+		}()
+
 		resp, err := c.upstream.Detect(ctx, text)
 		out <- upResult{resp: resp, err: err}
 	}()
 	return out
 }
 
-func collectSecretEntities(ch <-chan []Entity) []Entity {
+func collectSecretEntities(ctx context.Context, ch <-chan []Entity) []Entity {
 	if ch == nil {
 		return nil
 	}
-	return <-ch
+	select {
+	case <-ctx.Done():
+		return nil
+	case ents := <-ch:
+		return ents
+	}
 }
 
-func collectUpstreamResponse(ch <-chan upResult) (*DetectResponse, error) {
+func collectUpstreamResponse(ctx context.Context, ch <-chan upResult) (*DetectResponse, error) {
 	if ch == nil {
 		return &DetectResponse{Entities: []Entity{}}, nil
 	}
-
-	res := <-ch
-	if res.err != nil {
-		return nil, res.err
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case res := <-ch:
+		if res.err != nil {
+			return nil, res.err
+		}
+		if res.resp == nil {
+			return &DetectResponse{Entities: []Entity{}}, nil
+		}
+		return res.resp, nil
 	}
-	if res.resp == nil {
-		return &DetectResponse{Entities: []Entity{}}, nil
-	}
-	return res.resp, nil
 }
 
 func mergeEntities(base *DetectResponse, secretEntities []Entity) {
@@ -147,6 +165,7 @@ func NewMultiSecretsAnalyzer(log zerolog.Logger, backends ...Analyzer) *MultiSec
 }
 
 // Detect runs all backends and merges unique findings.
+// Results channel is buffered per backend so goroutines exit cleanly if ctx cancels early.
 func (m *MultiSecretsAnalyzer) Detect(ctx context.Context, text string) (*DetectResponse, error) {
 	results := make(chan []Entity, len(m.backends))
 
@@ -157,17 +176,18 @@ func (m *MultiSecretsAnalyzer) Detect(ctx context.Context, text string) (*Detect
 		}()
 	}
 
-	merged := mergeEntitySets(results, len(m.backends))
+	merged := mergeEntitySets(ctx, results, len(m.backends))
 	return &DetectResponse{PIIDetected: len(merged) > 0, Entities: merged}, nil
 }
 
-func (m *MultiSecretsAnalyzer) detectBackendEntities(ctx context.Context, backend Analyzer, text string) []Entity {
+func (m *MultiSecretsAnalyzer) detectBackendEntities(ctx context.Context, backend Analyzer, text string) (entities []Entity) {
 	defer func() {
 		if p := recover(); p != nil {
 			m.log.Error().
 				Str("panic", fmt.Sprintf("%v", p)).
 				Str("stack", string(debug.Stack())).
 				Msg("secrets backend panicked in MultiSecretsAnalyzer")
+			entities = nil
 		}
 	}()
 
@@ -182,18 +202,23 @@ func (m *MultiSecretsAnalyzer) detectBackendEntities(ctx context.Context, backen
 	return resp.Entities
 }
 
-func mergeEntitySets(results <-chan []Entity, expected int) []Entity {
+func mergeEntitySets(ctx context.Context, results <-chan []Entity, expected int) []Entity {
 	seen := make(map[entityKey]struct{})
 	merged := make([]Entity, 0)
 
 	for i := 0; i < expected; i++ {
-		for _, e := range <-results {
-			k := entityKey{Type: e.Type, Start: e.Start, End: e.End}
-			if _, ok := seen[k]; ok {
-				continue
+		select {
+		case <-ctx.Done():
+			return merged
+		case ents := <-results:
+			for _, e := range ents {
+				k := entityKey{Type: e.Type, Start: e.Start, End: e.End}
+				if _, ok := seen[k]; ok {
+					continue
+				}
+				seen[k] = struct{}{}
+				merged = append(merged, e)
 			}
-			seen[k] = struct{}{}
-			merged = append(merged, e)
 		}
 	}
 

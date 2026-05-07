@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something is broken in the proxy
+about: Something is broken in the Gateway
 title: ''
 labels: bug
 assignees: ''
@@ -15,7 +15,7 @@ assignees: ''
 
 **Steps to reproduce**
 
-<!-- Minimal reproduction — a curl command and config snippet is ideal. -->
+<!-- Minimal reproduction; a curl command and config snippet is ideal. -->
 
 ```bash
 # example
@@ -43,7 +43,7 @@ curl -s -X POST http://localhost:8080/v1/chat/completions \
 
 </details>
 
-**Proxy logs**
+**Gateway logs**
 
 <details>
 <summary>logs</summary>

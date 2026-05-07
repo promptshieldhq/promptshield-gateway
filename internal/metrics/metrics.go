@@ -8,7 +8,7 @@ import (
 	"github.com/promptshieldhq/promptshield-gateway/internal/audit"
 )
 
-// Registry is a clean Prometheus registry — no default Go runtime metrics.
+// Registry is a clean Prometheus registry; no default Go runtime metrics.
 var Registry = prometheus.NewRegistry()
 
 const (

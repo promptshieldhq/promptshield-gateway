@@ -31,7 +31,7 @@ func NewWatcher(path string, log zerolog.Logger, onChange func(*Policy, error)) 
 func (w *Watcher) Start(ctx context.Context) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
-		w.log.Warn().Err(err).Msg("policy watcher: failed to create fsnotify watcher — hot reload disabled")
+		w.log.Warn().Err(err).Msg("policy watcher: failed to create fsnotify watcher; hot reload disabled")
 		return
 	}
 	defer fw.Close()
@@ -40,7 +40,7 @@ func (w *Watcher) Start(ctx context.Context) {
 	base := filepath.Base(w.path)
 
 	if err := fw.Add(dir); err != nil {
-		w.log.Warn().Err(err).Str("dir", dir).Msg("policy watcher: failed to watch directory — hot reload disabled")
+		w.log.Warn().Err(err).Str("dir", dir).Msg("policy watcher: failed to watch directory; hot reload disabled")
 		return
 	}
 
@@ -114,7 +114,7 @@ func (w *Watcher) isStopped() bool {
 func (w *Watcher) reloadPolicy() {
 	p, err := Load(w.path)
 	if err != nil {
-		w.log.Error().Err(err).Str("path", w.path).Msg("policy watcher: reload failed — keeping previous policy")
+		w.log.Error().Err(err).Str("path", w.path).Msg("policy watcher: reload failed; keeping previous policy")
 	} else {
 		w.log.Info().Str("path", w.path).Msg("policy watcher: policy reloaded")
 	}
